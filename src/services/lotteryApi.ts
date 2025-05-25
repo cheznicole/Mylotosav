@@ -31,7 +31,7 @@ interface Prediction {
 }
 
 // Calendrier des tirages
-const DRAW_SCHEDULE: DrawSchedule = {
+export const DRAW_SCHEDULE: DrawSchedule = {
   Lundi: { '10H': 'Reveil', '13H': 'Etoile', '16H': 'Akwaba', '18H15': 'Monday Special' },
   Mardi: { '10H': 'La Matinale', '13H': 'Emergence', '16H': 'Sika', '18H15': 'Lucky Tuesday' },
   Mercredi: { '10H': 'Premiere Heure', '13H': 'Fortune', '16H': 'Baraka', '18H15': 'Midweek' },
@@ -96,7 +96,7 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
           drawDate = parsedDate.toISOString().split('T')[0];
 
         } catch (e) {
-          console.warn(`Invalid date format: ${dateStr}, error: ${e}`);
+          console.warn(`Invalid date format: ${dateStr}, error: ${e instanceof Error ? e.message : String(e)}`);
           continue;
         }
         
@@ -147,7 +147,7 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
 }
 
 // Analyse fréquentielle
-function analyzeFrequencies(draws: DrawResult[]): { [key: number]: number } {
+export function analyzeFrequencies(draws: DrawResult[]): { [key: number]: number } {
   const allNumbers = draws.flatMap(draw => draw.gagnants);
   const frequency: { [key: number]: number } = {};
   allNumbers.forEach(num => { frequency[num] = (frequency[num] || 0) + 1; });
@@ -362,19 +362,17 @@ export async function analyzeLotteryResults(month?: string): Promise<AnalysisRes
   const draws = await fetchLotteryResults(month);
   const pastPredictions = await getPastPredictions(); // Will be empty array if IndexedDB is not available
   
-  const frequencies = analyzeFrequencies(draws);
+  const frequenciesData = analyzeFrequencies(draws);
   const coOccurrences = analyzeCoOccurrences(draws);
   const successivePairs = analyzeSuccessivePairs(draws);
-  const bayesianProbabilitiesResult = bayesianProbabilities(frequencies, pastPredictions);
+  const bayesianProbabilitiesResult = bayesianProbabilities(frequenciesData, pastPredictions);
   const suggestedCombination = generateCombination(bayesianProbabilitiesResult);
 
   return {
-    frequencies,
+    frequencies: frequenciesData,
     coOccurrences,
     successivePairs,
     bayesianProbabilities: bayesianProbabilitiesResult,
     suggestedCombination,
   };
 }
-
-    
