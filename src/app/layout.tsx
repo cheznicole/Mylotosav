@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Geist_Sans } from 'geist/font/sans'; // Corrected import path
+import { GeistSans } from 'geist/font/sans'; // Corrected import path
 import './globals.css';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/AppSidebar';
@@ -7,10 +7,11 @@ import { Toaster } from '@/components/ui/toaster';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
 
-const geistSans = Geist_Sans({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
+// Removed the incorrect function call:
+// const geistSans = GeistSans({
+//   variable: '--font-geist-sans',
+//   subsets: ['latin'],
+// });
 
 export const metadata: Metadata = {
   title: 'Mylotosav',
@@ -24,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className="dark"> {/* Ensure dark class is on html for theme */}
-      <body className={`${geistSans.variable} antialiased`}>
+      <body className={`${GeistSans.variable} antialiased`}> {/* Use GeistSans.variable directly */}
         <SidebarProvider defaultOpen={true}>
           <AppSidebar />
           <SidebarInset className="flex flex-col min-h-screen">
