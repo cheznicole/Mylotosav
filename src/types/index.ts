@@ -1,3 +1,4 @@
+
 export interface LotteryResult {
   id: string;
   date: string;
@@ -25,4 +26,11 @@ export interface AIPrediction {
 export interface StrategyPrediction {
   predictedNumbers: number[];
   confidenceScores: number[];
+}
+
+// Added from the new lotteryApi.ts
+export interface PredictionResult {
+  bayesianProbabilities: { [key: number]: number };
+  suggestedCombination: number[];
+  successivePairs: Array<{ date1: string; date2: string; common_numbers: number[] }>;
 }
