@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -120,7 +121,7 @@ export default function ResultsDisplay({ drawName }: ResultsDisplayProps) {
                   <TableCell>
                     <div className="flex flex-wrap gap-2">
                       {result.machine && result.machine.map((num) => (
-                        <LotteryNumberDisplay key={num} number={num} size="sm" className="opacity-75 bg-gray-500" />
+                        <LotteryNumberDisplay key={num} number={num} size="sm" className="opacity-75" />
                       ))}
                       {!result.machine && <span className="text-xs text-muted-foreground">N/A</span>}
                     </div>
