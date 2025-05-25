@@ -8,98 +8,57 @@ body {
 
 @layer base {
   :root {
-    --background: 60 50% 95%; /* #F8F8EE - Light Desaturated Yellow */
-    --foreground: 60 10% 20%; /* Darker warm gray for text */
+    /* Dark Theme Variables (Professional Dark) */
+    --background: 60 10% 10%; /* Dark Slate Gray / Very Dark Desaturated Blue */
+    --foreground: 60 50% 90%; /* Light Gray */
 
-    --card: 60 50% 98%;
-    --card-foreground: 60 10% 20%;
+    --card: 60 10% 12%; /* Slightly Lighter Dark Slate */
+    --card-foreground: 60 50% 90%; /* Light Gray */
 
-    --popover: 60 50% 98%;
-    --popover-foreground: 60 10% 20%;
+    --popover: 60 10% 8%; /* Even Darker for popovers */
+    --popover-foreground: 60 50% 90%; /* Light Gray */
 
-    --primary: 45 100% 60%; /* #FFC133 - Saffron */
+    --primary: 45 100% 60%; /* #FFC133 - Saffron (Keep vibrant for contrast) */
     --primary-foreground: 45 100% 10%; /* Dark text on primary */
 
-    --secondary: 60 40% 90%; /* Slightly darker than background */
-    --secondary-foreground: 60 10% 20%;
+    --secondary: 60 10% 20%; /* Medium Dark Gray */
+    --secondary-foreground: 60 50% 80%; /* Lighter Gray */
 
-    --muted: 60 40% 85%;
-    --muted-foreground: 60 10% 45%; /* Lighter text for muted contexts */
+    --muted: 60 10% 25%; /* Dark Gray for muted elements */
+    --muted-foreground: 60 50% 60%; /* Medium Gray for muted text */
 
-    --accent: 39 78% 52%; /* #E0A227 - Golden Orange */
+    --accent: 39 78% 52%; /* #E0A227 - Golden Orange (Keep for highlights) */
     --accent-foreground: 39 78% 10%; /* Dark text on accent */
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 60% 50%; /* Darker Red for destructive actions */
+    --destructive-foreground: 0 0% 98%; /* Light text on destructive */
 
-    --border: 60 30% 80%;
-    --input: 60 30% 80%;
+    --border: 60 10% 30%; /* Dark Gray for borders */
+    --input: 60 10% 25%; /* Dark Gray for input backgrounds */
     --ring: 45 100% 60%; /* Primary color for focus rings */
 
     --radius: 0.5rem;
 
-    /* Sidebar specific colors - can inherit or be customized */
-    --sidebar-background: 60 50% 92%; /* Slightly darker than main background */
-    --sidebar-foreground: 60 10% 15%;
+    /* Sidebar specific colors - dark theme */
+    --sidebar-background: 60 10% 8%; /* Very Dark for Sidebar */
+    --sidebar-foreground: 60 50% 85%; /* Light gray for sidebar text */
     --sidebar-primary: 45 100% 55%; /* Slightly darker primary for sidebar active elements */
     --sidebar-primary-foreground: 45 100% 10%;
     --sidebar-accent: 39 78% 48%; /* Slightly darker accent for sidebar hover */
     --sidebar-accent-foreground: 39 78% 10%;
-    --sidebar-border: 60 30% 75%;
+    --sidebar-border: 60 10% 20%; /* Dark border for sidebar */
     --sidebar-ring: 45 100% 55%;
 
-    --chart-1: 45 100% 60%; /* primary */
-    --chart-2: 39 78% 52%; /* accent */
-    --chart-3: 25 80% 55%; /* A complementary orange/red */
-    --chart-4: 190 65% 50%; /* A complementary teal/blue */
-    --chart-5: 280 60% 60%; /* A complementary purple */
+    /* Chart colors for dark theme */
+    --chart-1: 45 100% 60%; /* primary - Saffron */
+    --chart-2: 39 78% 52%; /* accent - Golden Orange */
+    --chart-3: 200 80% 55%; /* A complementary cyan/blue */
+    --chart-4: 300 65% 60%; /* A complementary magenta/purple */
+    --chart-5: 150 60% 50%; /* A complementary teal/green */
   }
 
-  .dark {
-    /* Define dark theme variables if needed, or keep them similar to light if dark mode is not a primary focus */
-    --background: 60 10% 10%;
-    --foreground: 60 50% 90%;
-
-    --card: 60 10% 12%;
-    --card-foreground: 60 50% 90%;
-
-    --popover: 60 10% 12%;
-    --popover-foreground: 60 50% 90%;
-
-    --primary: 45 100% 60%;
-    --primary-foreground: 45 100% 10%;
-
-    --secondary: 60 10% 20%;
-    --secondary-foreground: 60 50% 90%;
-
-    --muted: 60 10% 25%;
-    --muted-foreground: 60 50% 60%;
-
-    --accent: 39 78% 52%;
-    --accent-foreground: 39 78% 10%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 60 10% 30%;
-    --input: 60 10% 30%;
-    --ring: 45 100% 60%;
-    
-    --sidebar-background: 60 10% 8%;
-    --sidebar-foreground: 60 50% 85%;
-    --sidebar-primary: 45 100% 55%;
-    --sidebar-primary-foreground: 45 100% 10%;
-    --sidebar-accent: 39 78% 48%;
-    --sidebar-accent-foreground: 39 78% 10%;
-    --sidebar-border: 60 10% 25%;
-    --sidebar-ring: 45 100% 55%;
-
-    --chart-1: 45 100% 60%;
-    --chart-2: 39 78% 52%;
-    --chart-3: 25 80% 55%;
-    --chart-4: 190 65% 50%;
-    --chart-5: 280 60% 60%;
-  }
+  /* Remove .dark class wrapper, apply dark theme directly */
+  /* html[class~="dark"] { ... } */
 }
 
 @layer base {

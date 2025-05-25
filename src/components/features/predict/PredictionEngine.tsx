@@ -11,51 +11,72 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
 import LotteryNumberDisplay from '@/components/features/lottery/LotteryNumberDisplay';
-import { Loader2, Wand2, FileText } from 'lucide-react';
-import type { AIPrediction, StrategyPrediction, LotteryResult } from '@/types';
+import { Loader2, Wand2, FileText, AlertTriangle } from 'lucide-react';
+import type { AIPrediction, StrategyPrediction } from '@/types'; // Assuming DrawResult is handled by API
+import type { DrawResult as ApiDrawResult } from '@/services/lotteryApi';
 import { predictLottoNumbersWithStrategy } from '@/ai/flows/prompt-for-lotto-strategy';
 import { generateLottoPredictions } from '@/ai/flows/generate-lotto-predictions';
-import { fetchLotteryResults, getPastResultsStringForAI } from '@/lib/mockApi'; // To prepopulate past results
+import { fetchLotteryResults, getPastResultsStringForAI } from '@/lib/mockApi'; // To prepopulate past results FOR NOW - should use lotteryApi
+// TODO: Replace mockApi with actual lotteryApi for fetching past results relevant to drawName
+
+interface PredictionEngineProps {
+  drawName: string;
+}
 
 // Schemas for forms
 const PastResultsFormSchema = z.object({
-  pastResults: z.string().min(10, { message: "Please provide some past results." }),
+  pastResults: z.string().min(10, { message: "Veuillez fournir des résultats passés." }),
 });
 type PastResultsFormData = z.infer<typeof PastResultsFormSchema>;
 
 const StrategyFormSchema = z.object({
-  strategyPrompt: z.string().min(10, { message: "Please describe your strategy." }),
+  strategyPrompt: z.string().min(10, { message: "Veuillez décrire votre stratégie." }),
 });
 type StrategyFormData = z.infer<typeof StrategyFormSchema>;
 
 
-export default function PredictionEngine() {
+export default function PredictionEngine({ drawName }: PredictionEngineProps) {
   const { toast } = useToast();
   const [isLoadingModel, setIsLoadingModel] = useState(false);
   const [modelPrediction, setModelPrediction] = useState<AIPrediction | null>(null);
   const [isLoadingStrategy, setIsLoadingStrategy] = useState(false);
   const [strategyPrediction, setStrategyPrediction] = useState<StrategyPrediction | null>(null);
   const [initialPastResults, setInitialPastResults] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadInitialResults() {
+      setError(null);
       try {
-        const results = await fetchLotteryResults();
-        setInitialPastResults(getPastResultsStringForAI(results));
-      } catch (error) {
-        console.error("Failed to load initial past results for AI", error);
-        // Set a generic placeholder if fetch fails
-        setInitialPastResults("Example: Date: 2024-07-20, Winning: 5, 12, 23, 34, 45, Machine: 1, 7; ...");
+        // TODO: Fetch past results specifically for `drawName` using lotteryApi.ts
+        // For now, using mock data as a placeholder.
+        const results = await fetchLotteryResults(); // This is MOCK, needs to be filtered by drawName
+        const relevantResults = results.filter(r => r.id.includes(drawName.substring(0,3).toLowerCase())); // VERY crude filter for mock
+        
+        // If using actual API:
+        // const allApiResults = await actualFetchLotteryResults(); // from services/lotteryApi
+        // const relevantApiResults = allApiResults.filter(r => r.draw_name === drawName);
+        // const pastResultsString = relevantApiResults.map(r => `Date: ${r.date}, Gagnants: ${r.gagnants.join(',')}, Machine: ${r.machine ? r.machine.join(',') : 'N/A'}`).join('; ');
+        // setInitialPastResults(pastResultsString);
+
+        setInitialPastResults(getPastResultsStringForAI(relevantResults));
+
+      } catch (err) {
+        console.error(`Failed to load initial past results for AI for ${drawName}`, err);
+        setError(`Impossible de charger les résultats passés pour ${drawName}.`);
+        setInitialPastResults(`Exemple: Date: 2024-07-20, Gagnants: 5, 12, 23, 34, 45, Machine: 1, 7 (pour ${drawName}); ...`);
       }
     }
-    loadInitialResults();
-  }, []);
+    if (drawName) {
+        loadInitialResults();
+    }
+  }, [drawName]);
   
   useEffect(() => {
     if (initialPastResults && pastResultsForm.getValues("pastResults") === "") {
        pastResultsForm.reset({ pastResults: initialPastResults });
     }
-  }, [initialPastResults]);
+  }, [initialPastResults, pastResultsForm]);
 
 
   const pastResultsForm = useForm<PastResultsFormData>({
@@ -71,13 +92,17 @@ export default function PredictionEngine() {
   const onPastResultsSubmit: SubmitHandler<PastResultsFormData> = async (data) => {
     setIsLoadingModel(true);
     setModelPrediction(null);
+    setError(null);
     try {
+      // The AI flow might need to be aware of the drawName if models are category-specific.
+      // For now, it uses the provided pastResults string.
       const result = await generateLottoPredictions({ pastResults: data.pastResults });
       setModelPrediction(result);
-      toast({ title: "Prediction Generated", description: "Model-based prediction successful." });
+      toast({ title: "Prédiction Générée", description: "Prédiction basée sur le modèle réussie." });
     } catch (error) {
       console.error("Error generating model prediction:", error);
-      toast({ variant: "destructive", title: "Prediction Error", description: "Could not generate model-based prediction." });
+      setError("Impossible de générer la prédiction basée sur le modèle.");
+      toast({ variant: "destructive", title: "Erreur de Prédiction", description: "Impossible de générer la prédiction basée sur le modèle." });
     } finally {
       setIsLoadingModel(false);
     }
@@ -86,13 +111,16 @@ export default function PredictionEngine() {
   const onStrategySubmit: SubmitHandler<StrategyFormData> = async (data) => {
     setIsLoadingStrategy(true);
     setStrategyPrediction(null);
+    setError(null);
     try {
+      // The AI flow might need to be aware of the drawName.
       const result = await predictLottoNumbersWithStrategy({ strategyPrompt: data.strategyPrompt });
       setStrategyPrediction(result);
-      toast({ title: "Prediction Generated", description: "Strategy-based prediction successful." });
+      toast({ title: "Prédiction Générée", description: "Prédiction basée sur la stratégie réussie." });
     } catch (error) {
       console.error("Error generating strategy prediction:", error);
-      toast({ variant: "destructive", title: "Prediction Error", description: "Could not generate strategy-based prediction." });
+      setError("Impossible de générer la prédiction basée sur la stratégie.");
+      toast({ variant: "destructive", title: "Erreur de Prédiction", description: "Impossible de générer la prédiction basée sur la stratégie." });
     } finally {
       setIsLoadingStrategy(false);
     }
@@ -103,11 +131,11 @@ export default function PredictionEngine() {
     return (
       <Card className="mt-6 shadow-md">
         <CardHeader>
-          <CardTitle className="text-xl text-primary">{title}</CardTitle>
+          <CardTitle className="text-lg text-primary">{title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <h4 className="font-semibold mb-2">Predicted Numbers:</h4>
+            <h4 className="font-semibold mb-2">Numéros Prédits:</h4>
             <div className="flex flex-wrap gap-2">
               {prediction.predictedNumbers.map((num, index) => (
                 <LotteryNumberDisplay key={`${num}-${index}`} number={num} />
@@ -115,7 +143,7 @@ export default function PredictionEngine() {
             </div>
           </div>
           <div>
-            <h4 className="font-semibold mb-2">Confidence Scores:</h4>
+            <h4 className="font-semibold mb-2">Scores de Confiance:</h4>
             <div className="flex flex-wrap gap-2">
               {prediction.confidenceScores.map((score, index) => (
                 <div key={`conf-${index}`} className="p-2 border rounded-md bg-muted/50 text-sm">
@@ -126,7 +154,7 @@ export default function PredictionEngine() {
           </div>
           {analysis && (
             <div>
-              <h4 className="font-semibold mb-2">Analysis:</h4>
+              <h4 className="font-semibold mb-2">Analyse:</h4>
               <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md">{analysis}</p>
             </div>
           )}
@@ -134,26 +162,43 @@ export default function PredictionEngine() {
       </Card>
     );
   };
+  
+  if (error) {
+    return (
+         <Card>
+            <CardHeader>
+                <CardTitle className="text-xl font-semibold text-primary">Prédictions IA pour {drawName}</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="flex items-center p-4 mb-4 text-sm text-destructive-foreground bg-destructive rounded-lg" role="alert">
+                    <AlertTriangle className="w-5 h-5 mr-3" />
+                    <span className="font-medium">Erreur:</span> {error}
+                </div>
+            </CardContent>
+         </Card>
+    )
+  }
+
 
   return (
     <Tabs defaultValue="model" className="w-full">
       <CardHeader className="px-0">
-        <CardTitle className="text-2xl font-bold text-primary mb-2">AI Predictions</CardTitle>
+        <CardTitle className="text-xl font-semibold text-primary">Prédictions IA pour {drawName}</CardTitle>
         <CardDescription>
-            Generate lottery predictions using AI. Choose your method below.
+            Générez des prédictions de loterie en utilisant l'IA pour le tirage {drawName}. Choisissez votre méthode ci-dessous.
         </CardDescription>
         <TabsList className="grid w-full grid-cols-2 mt-4">
-          <TabsTrigger value="model"><FileText className="w-4 h-4 mr-2" />Past Results Model</TabsTrigger>
-          <TabsTrigger value="strategy"><Wand2 className="w-4 h-4 mr-2" />Custom Strategy</TabsTrigger>
+          <TabsTrigger value="model"><FileText className="w-4 h-4 mr-2" />Modèle Basé sur Résultats Passés</TabsTrigger>
+          <TabsTrigger value="strategy"><Wand2 className="w-4 h-4 mr-2" />Stratégie Personnalisée</TabsTrigger>
         </TabsList>
       </CardHeader>
 
       <TabsContent value="model">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Predict based on Past Results</CardTitle>
+            <CardTitle className="text-base">Prédire basé sur les Résultats Passés</CardTitle>
             <CardDescription>
-              Input past lottery results data. The AI will use its pre-trained model (e.g., XGBoost + RNN-LSTM) to find patterns and predict future numbers.
+              Entrez les données des résultats de loterie passés pour {drawName}. L'IA utilisera son modèle pré-entraîné pour trouver des motifs et prédire les numéros futurs.
             </CardDescription>
           </CardHeader>
           <Form {...pastResultsForm}>
@@ -164,10 +209,10 @@ export default function PredictionEngine() {
                   name="pastResults"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Past Lottery Results Data</FormLabel>
+                      <FormLabel>Données des Résultats de Loterie Passés ({drawName})</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="Enter past results, e.g., 'Date: 2023-01-01, Winning: 1,2,3,4,5, Machine: 6,7; Date: 2023-01-08, ...'"
+                          placeholder={`Entrez les résultats passés pour ${drawName}, ex: 'Date: 2023-01-01, Gagnants: 1,2,3,4,5, Machine: 6,7; ...'`}
                           className="min-h-[150px] text-sm"
                           {...field}
                         />
@@ -180,21 +225,21 @@ export default function PredictionEngine() {
               <CardFooter>
                 <Button type="submit" disabled={isLoadingModel} className="w-full sm:w-auto">
                   {isLoadingModel && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Generate Prediction
+                  Générer la Prédiction
                 </Button>
               </CardFooter>
             </form>
           </Form>
-          {renderPrediction(modelPrediction, "Model-Based Prediction", modelPrediction?.analysis)}
+          {renderPrediction(modelPrediction, "Prédiction Basée sur le Modèle", modelPrediction?.analysis)}
         </Card>
       </TabsContent>
 
       <TabsContent value="strategy">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Predict based on Your Strategy</CardTitle>
+            <CardTitle className="text-base">Prédire basé sur Votre Stratégie</CardTitle>
             <CardDescription>
-              Describe your lottery number selection strategy. The AI will interpret your strategy and generate numbers accordingly.
+              Décrivez votre stratégie de sélection de numéros de loterie pour {drawName}. L'IA interprétera votre stratégie et générera des numéros en conséquence.
             </CardDescription>
           </CardHeader>
           <Form {...strategyForm}>
@@ -205,10 +250,10 @@ export default function PredictionEngine() {
                   name="strategyPrompt"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Your Lottery Strategy</FormLabel>
+                      <FormLabel>Votre Stratégie de Loterie ({drawName})</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="e.g., 'Focus on numbers that haven't appeared in the last 10 draws, and include at least two prime numbers.'"
+                          placeholder="ex: 'Se concentrer sur les numéros qui ne sont pas apparus dans les 10 derniers tirages de [drawName], et inclure au moins deux nombres premiers.'"
                           className="min-h-[100px] text-sm"
                           {...field}
                         />
@@ -221,12 +266,12 @@ export default function PredictionEngine() {
               <CardFooter>
                 <Button type="submit" disabled={isLoadingStrategy} className="w-full sm:w-auto">
                   {isLoadingStrategy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Generate Prediction with Strategy
+                  Générer la Prédiction avec Stratégie
                 </Button>
               </CardFooter>
             </form>
           </Form>
-          {renderPrediction(strategyPrediction, "Strategy-Based Prediction")}
+          {renderPrediction(strategyPrediction, "Prédiction Basée sur la Stratégie")}
         </Card>
       </TabsContent>
     </Tabs>

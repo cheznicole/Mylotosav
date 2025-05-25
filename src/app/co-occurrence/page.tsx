@@ -1,9 +1,12 @@
-import CooccurrenceMatrix from '@/components/features/cooccurrence/CooccurrenceMatrix';
+// This page is now superseded by /draw/[drawSlug] with the "Consulter" tab.
+// Redirecting to the first draw category for now.
+import { redirect } from 'next/navigation';
+import { getFirstDrawSlug } from '@/lib/utils';
 
 export default function CooccurrencePage() {
-  return (
-    <div className="container mx-auto py-8">
-      <CooccurrenceMatrix />
-    </div>
-  );
+  const firstDrawSlug = getFirstDrawSlug();
+  if (firstDrawSlug) {
+    redirect(`/draw/${firstDrawSlug}?tab=consulter`); // Attempt to go to consulter tab
+  }
+  return null;
 }

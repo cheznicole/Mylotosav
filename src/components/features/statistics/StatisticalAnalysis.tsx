@@ -1,75 +1,47 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from 'react';
 import type { NumberFrequency } from '@/types';
 import { fetchLotteryResults, analyzeFrequencies, DRAW_SCHEDULE, type DrawResult as ApiDrawResult } from '@/services/lotteryApi';
 import LotteryNumberDisplay from '@/components/features/lottery/LotteryNumberDisplay';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Terminal, CalendarDays, ListFilter } from "lucide-react";
+import { Terminal } from "lucide-react";
 
 const CHART_ITEMS_COUNT = 15;
 
-// Helper to generate recent months for the filter
-function getRecentMonths(count: number): { value: string; label: string }[] {
-  const months = [];
-  const today = new Date();
-  for (let i = 0; i < count; i++) {
-    const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const monthName = date.toLocaleString('fr-FR', { month: 'long' }); // Use French month names
-    months.push({ value: `${year}-${month}`, label: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}` });
-  }
-  return months;
+interface StatisticalAnalysisProps {
+  specificDrawName: string; // Expecting the specific draw name from the parent page
 }
 
-// Helper to get unique draw names from the schedule
-function getUniqueDrawNames(schedule: typeof DRAW_SCHEDULE): string[] {
-  const names = new Set<string>();
-  Object.values(schedule).forEach(daySchedule => {
-    Object.values(daySchedule).forEach(name => names.add(name));
-  });
-  return Array.from(names).sort();
-}
-
-
-export default function StatisticalAnalysis() {
+export default function StatisticalAnalysis({ specificDrawName }: StatisticalAnalysisProps) {
   const [allFetchedResults, setAllFetchedResults] = useState<ApiDrawResult[]>([]);
   const [frequencies, setFrequencies] = useState<NumberFrequency[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const availableMonths = useMemo(() => getRecentMonths(6), []); // Last 6 months
-  const allDrawNames = useMemo(() => getUniqueDrawNames(DRAW_SCHEDULE), []);
-
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => availableMonths[0]?.value || "");
-  const [selectedDrawName, setSelectedDrawName] = useState<string>("all");
-
+  
+  // Month filter can be added back if needed, for now, focus on the specificDrawName
+  // const availableMonths = useMemo(() => getRecentMonths(6), []);
+  // const [selectedMonth, setSelectedMonth] = useState<string>(() => availableMonths[0]?.value || "");
 
   useEffect(() => {
-    if (!selectedMonth) return;
+    // if (!selectedMonth) return; // Uncomment if month filter is re-added
 
     const loadResultsForMonth = async () => {
       setLoading(true);
       setError(null);
       try {
-        // The API month format is not specified, assuming YYYY-MM might work or it might fetch all.
-        // For LotoBonheur, month might be like "07-2024" or just "07".
-        // Let's try with YYYY-MM as it's a common standard.
-        // The actual API call `https://lotobonheur.ci/api/results?month=${month}` needs to be checked for its expected format.
-        // For now, `fetchLotteryResults` in `services/lotteryApi.ts` uses the `month` param in the URL.
-        const data = await fetchLotteryResults(selectedMonth);
+        // Fetch results, potentially for a default period or all available
+        // If API supports monthly fetching and it's desired:
+        // const data = await fetchLotteryResults(selectedMonth);
+        const data = await fetchLotteryResults(); // Fetches based on API default (e.g., current month)
         setAllFetchedResults(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch lottery results.');
-        setAllFetchedResults([]); // Clear previous results on error
+        setAllFetchedResults([]);
         setFrequencies([]);
         console.error(err);
       } finally {
@@ -77,38 +49,30 @@ export default function StatisticalAnalysis() {
       }
     };
     loadResultsForMonth();
-  }, [selectedMonth]);
+  }, []); // Re-fetch if selectedMonth changes (if month filter is re-added)
 
 
   useEffect(() => {
-    if (!allFetchedResults) return;
+    if (!allFetchedResults || !specificDrawName) return;
 
-    let filteredByDrawName = allFetchedResults;
-    if (selectedDrawName !== "all") {
-      filteredByDrawName = allFetchedResults.filter(result => result.draw_name === selectedDrawName);
-    }
+    const filteredByDrawName = allFetchedResults.filter(result => result.draw_name === specificDrawName);
 
     if (filteredByDrawName.length === 0 && allFetchedResults.length > 0) {
-       setFrequencies([]); // Show no data if filter results in empty, but we had initial data
+       setFrequencies([]);
        return;
     }
-     if (filteredByDrawName.length === 0 && selectedDrawName !== "all") {
-      setFrequencies([]); // No data for this specific draw name
-      return;
-    }
-
-
-    const rawFrequencies = analyzeFrequencies(filteredByDrawName);
+    
+    const rawFrequencies = analyzeFrequencies(filteredByDrawName); // analyzeFrequencies is from lotteryApi
     const formattedFrequencies: NumberFrequency[] = Object.entries(rawFrequencies)
       .map(([numStr, freq]) => ({
         number: parseInt(numStr, 10),
         frequency: freq,
       }))
-      .sort((a, b) => b.number - a.number); // Sort by number for consistent chart X-axis
+      .sort((a, b) => b.number - a.number); 
     
     setFrequencies(formattedFrequencies);
 
-  }, [allFetchedResults, selectedDrawName]);
+  }, [allFetchedResults, specificDrawName]);
 
 
   const mostFrequent = useMemo(() => 
@@ -120,13 +84,21 @@ export default function StatisticalAnalysis() {
     [frequencies]
   );
 
-  if (error && !loading) { // Only show error if not loading new data
+  if (error && !loading) {
      return (
-       <Alert variant="destructive">
-        <Terminal className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
+       <Card>
+        <CardHeader>
+            <CardTitle className="text-xl font-semibold text-primary">Statistiques des Numéros</CardTitle>
+            <CardDescription>Analyse fréquentielle pour {specificDrawName}.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Alert variant="destructive">
+                <Terminal className="h-4 w-4" />
+                <AlertTitle>Erreur</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+            </Alert>
+        </CardContent>
+       </Card>
     );
   }
   
@@ -134,17 +106,18 @@ export default function StatisticalAnalysis() {
     <ResponsiveContainer width="100%" height={400}>
       <BarChart data={data.sort((a,b) => a.number - b.number)} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-        <XAxis dataKey="number" stroke="hsl(var(--foreground))" />
-        <YAxis stroke="hsl(var(--foreground))" allowDecimals={false}/>
+        <XAxis dataKey="number" stroke="hsl(var(--foreground))" fontSize={12} />
+        <YAxis stroke="hsl(var(--foreground))" allowDecimals={false} fontSize={12}/>
         <Tooltip
           contentStyle={{ 
-            backgroundColor: 'hsl(var(--background))', 
+            backgroundColor: 'hsl(var(--popover))', 
             borderColor: 'hsl(var(--border))',
-            borderRadius: 'var(--radius)' 
+            borderRadius: 'var(--radius)',
+            color: 'hsl(var(--popover-foreground))'
           }}
-          cursor={{ fill: 'hsl(var(--muted))' }}
+          cursor={{ fill: 'hsla(var(--muted), 0.5)' }}
         />
-        <Legend />
+        <Legend wrapperStyle={{ color: 'hsl(var(--foreground))' }} />
         <Bar dataKey="frequency" fill="hsl(var(--primary))" name={title} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
@@ -155,49 +128,14 @@ export default function StatisticalAnalysis() {
   return (
     <Tabs defaultValue="mostFrequent" className="w-full">
       <CardHeader className="px-0">
-        <CardTitle className="text-2xl font-bold text-primary">Number Statistics</CardTitle>
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-          <div>
-            <Label htmlFor="month-select" className="flex items-center mb-1 text-sm font-medium text-muted-foreground">
-              <CalendarDays className="w-4 h-4 mr-2"/>
-              Select Month
-            </Label>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger id="month-select" className="w-full md:w-[200px]">
-                <SelectValue placeholder="Select month" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableMonths.map(month => (
-                  <SelectItem key={month.value} value={month.value}>
-                    {month.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="draw-name-select" className="flex items-center mb-1 text-sm font-medium text-muted-foreground">
-              <ListFilter className="w-4 h-4 mr-2"/>
-              Select Draw Name
-            </Label>
-            <Select value={selectedDrawName} onValueChange={setSelectedDrawName}>
-              <SelectTrigger id="draw-name-select" className="w-full md:w-[240px]">
-                <SelectValue placeholder="Select draw name" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Draws</SelectItem>
-                {allDrawNames.map(name => (
-                  <SelectItem key={name} value={name}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        <CardTitle className="text-xl font-semibold text-primary">Statistiques des Numéros</CardTitle>
+        <CardDescription>
+          Analyse de la fréquence des numéros pour le tirage: {specificDrawName}.
+          {/* Month and Draw Name filters removed as context is provided by parent page */}
+        </CardDescription>
          <TabsList className="grid w-full grid-cols-2 md:w-1/2 mt-6">
-          <TabsTrigger value="mostFrequent">Most Frequent</TabsTrigger>
-          <TabsTrigger value="leastFrequent">Least Frequent</TabsTrigger>
+          <TabsTrigger value="mostFrequent">Plus Fréquents</TabsTrigger>
+          <TabsTrigger value="leastFrequent">Moins Fréquents</TabsTrigger>
         </TabsList>
       </CardHeader>
      
@@ -208,21 +146,21 @@ export default function StatisticalAnalysis() {
             {Array.from({length: CHART_ITEMS_COUNT}).map((_, idx) => <Skeleton key={idx} className="h-10 w-10 rounded-full" />)}
           </div>
         </div>
-      ) : noDataForFilters ? (
+      ) : noDataForFilters || frequencies.length === 0 ? (
          <Alert className="mt-4">
             <Terminal className="h-4 w-4" />
-            <AlertTitle>No Data</AlertTitle>
-            <AlertDescription>No lottery results found for the selected filters.</AlertDescription>
+            <AlertTitle>Données Insuffisantes</AlertTitle>
+            <AlertDescription>Pas assez de données pour afficher les statistiques pour {specificDrawName}.</AlertDescription>
         </Alert>
       ) : (
         <>
           <TabsContent value="mostFrequent">
             <Card className="shadow-lg mt-4">
               <CardHeader>
-                <CardTitle className="text-xl">Top {CHART_ITEMS_COUNT} Most Frequent Numbers</CardTitle>
+                <CardTitle className="text-lg">Top {CHART_ITEMS_COUNT} Numéros les Plus Fréquents</CardTitle>
               </CardHeader>
               <CardContent>
-                {frequencies.length > 0 ? renderChart(mostFrequent, "Frequency (Most Frequent)") : <p className="text-muted-foreground">Not enough data for chart.</p>}
+                {renderChart(mostFrequent, "Fréquence (Plus Fréquents)")}
                 <div className="mt-6 grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
                   {mostFrequent.map(item => <LotteryNumberDisplay key={`most-${item.number}`} number={item.number} />)}
                 </div>
@@ -232,10 +170,10 @@ export default function StatisticalAnalysis() {
           <TabsContent value="leastFrequent">
             <Card className="shadow-lg mt-4">
               <CardHeader>
-                <CardTitle className="text-xl">Top {CHART_ITEMS_COUNT} Least Frequent Numbers</CardTitle>
+                <CardTitle className="text-lg">Top {CHART_ITEMS_COUNT} Numéros les Moins Fréquents</CardTitle>
               </CardHeader>
               <CardContent>
-                 {frequencies.length > 0 ? renderChart(leastFrequent, "Frequency (Least Frequent)") : <p className="text-muted-foreground">Not enough data for chart.</p>}
+                 {renderChart(leastFrequent, "Fréquence (Moins Fréquents)")}
                  <div className="mt-6 grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
                   {leastFrequent.map(item => <LotteryNumberDisplay key={`least-${item.number}`} number={item.number} />)}
                 </div>
@@ -247,4 +185,3 @@ export default function StatisticalAnalysis() {
     </Tabs>
   );
 }
-
