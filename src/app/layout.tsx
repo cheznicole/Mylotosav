@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className="dark"> {/* Ensure dark class is on html for theme */}
+    <html lang="en" suppressHydrationWarning className="dark">
       <body className={`${GeistSans.variable} antialiased`}> {/* Use GeistSans.variable directly */}
         <SidebarProvider defaultOpen={true}>
           <AppSidebar />
