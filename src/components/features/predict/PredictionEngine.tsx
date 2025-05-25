@@ -14,9 +14,8 @@ import LotteryNumberDisplay from '@/components/features/lottery/LotteryNumberDis
 import { Loader2, Wand2, FileText, AlertTriangle } from 'lucide-react';
 import type { AIPrediction, StrategyPrediction } from '@/types'; // Assuming DrawResult is handled by API
 import type { DrawResult as ApiDrawResult } from '@/services/lotteryApi';
-import { predictLottoNumbersWithStrategy } from '@/ai/flows/prompt-for-lotto-strategy';
-import { generateLottoPredictions } from '@/ai/flows/generate-lotto-predictions';
-import { fetchLotteryResults, getPastResultsStringForAI } from '@/lib/mockApi'; // To prepopulate past results FOR NOW - should use lotteryApi
+import { fetchLotteryResults as fetchActualLotteryResults } from '@/services/lotteryApi';
+import { getPastResultsStringForAI } from '@/lib/mockApi'; // To prepopulate past results FOR NOW - should use lotteryApi
 // TODO: Replace mockApi with actual lotteryApi for fetching past results relevant to drawName
 
 interface PredictionEngineProps {
@@ -44,27 +43,38 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
   const [initialPastResults, setInitialPastResults] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const pastResultsForm = useForm<PastResultsFormData>({
+    resolver: zodResolver(PastResultsFormSchema),
+    defaultValues: { pastResults: "" },
+  });
+
+  const strategyForm = useForm<StrategyFormData>({
+    resolver: zodResolver(StrategyFormSchema),
+    defaultValues: { strategyPrompt: "" },
+  });
+
   useEffect(() => {
     async function loadInitialResults() {
       setError(null);
       try {
-        // TODO: Fetch past results specifically for `drawName` using lotteryApi.ts
-        // For now, using mock data as a placeholder.
-        const results = await fetchLotteryResults(); // This is MOCK, needs to be filtered by drawName
-        const relevantResults = results.filter(r => r.id.includes(drawName.substring(0,3).toLowerCase())); // VERY crude filter for mock
+        const allApiResults = await fetchActualLotteryResults(); 
+        const relevantApiResults = allApiResults.filter(r => r.draw_name === drawName);
         
-        // If using actual API:
-        // const allApiResults = await actualFetchLotteryResults(); // from services/lotteryApi
-        // const relevantApiResults = allApiResults.filter(r => r.draw_name === drawName);
-        // const pastResultsString = relevantApiResults.map(r => `Date: ${r.date}, Gagnants: ${r.gagnants.join(',')}, Machine: ${r.machine ? r.machine.join(',') : 'N/A'}`).join('; ');
-        // setInitialPastResults(pastResultsString);
-
-        setInitialPastResults(getPastResultsStringForAI(relevantResults));
+        if (relevantApiResults.length > 0) {
+            const pastResultsString = relevantApiResults
+                .slice(0, 20) // Use last 20 relevant results
+                .map(r => `Date: ${r.date}, Gagnants: ${r.gagnants.join(',')}${r.machine ? `, Machine: ${r.machine.join(',')}` : ''}`)
+                .join('; ');
+            setInitialPastResults(pastResultsString);
+        } else {
+            // Fallback if no specific results, provide a generic example
+            setInitialPastResults(`Exemple pour ${drawName}: Date: 2024-07-20, Gagnants: 5,12,23,34,45; ... (Aucun résultat récent trouvé pour ${drawName})`);
+        }
 
       } catch (err) {
         console.error(`Failed to load initial past results for AI for ${drawName}`, err);
         setError(`Impossible de charger les résultats passés pour ${drawName}.`);
-        setInitialPastResults(`Exemple: Date: 2024-07-20, Gagnants: 5, 12, 23, 34, 45, Machine: 1, 7 (pour ${drawName}); ...`);
+        setInitialPastResults(`Exemple: Date: 2024-07-20, Gagnants: 5,12,23,34,45 (pour ${drawName}); ...`);
       }
     }
     if (drawName) {
@@ -76,18 +86,9 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
     if (initialPastResults && pastResultsForm.getValues("pastResults") === "") {
        pastResultsForm.reset({ pastResults: initialPastResults });
     }
+  // pastResultsForm is now defined before this useEffect
   }, [initialPastResults, pastResultsForm]);
 
-
-  const pastResultsForm = useForm<PastResultsFormData>({
-    resolver: zodResolver(PastResultsFormSchema),
-    defaultValues: { pastResults: "" },
-  });
-
-  const strategyForm = useForm<StrategyFormData>({
-    resolver: zodResolver(StrategyFormSchema),
-    defaultValues: { strategyPrompt: "" },
-  });
 
   const onPastResultsSubmit: SubmitHandler<PastResultsFormData> = async (data) => {
     setIsLoadingModel(true);
@@ -163,7 +164,7 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
     );
   };
   
-  if (error) {
+  if (error && !isLoadingModel && !isLoadingStrategy) { // Show error only if not loading
     return (
          <Card>
             <CardHeader>
@@ -230,7 +231,8 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
               </CardFooter>
             </form>
           </Form>
-          {renderPrediction(modelPrediction, "Prédiction Basée sur le Modèle", modelPrediction?.analysis)}
+          {isLoadingModel && <div className="p-6 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
+          {!isLoadingModel && renderPrediction(modelPrediction, "Prédiction Basée sur le Modèle", modelPrediction?.analysis)}
         </Card>
       </TabsContent>
 
@@ -253,7 +255,7 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
                       <FormLabel>Votre Stratégie de Loterie ({drawName})</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="ex: 'Se concentrer sur les numéros qui ne sont pas apparus dans les 10 derniers tirages de [drawName], et inclure au moins deux nombres premiers.'"
+                          placeholder={`ex: 'Se concentrer sur les numéros qui ne sont pas apparus dans les 10 derniers tirages de ${drawName}, et inclure au moins deux nombres premiers.'`}
                           className="min-h-[100px] text-sm"
                           {...field}
                         />
@@ -271,9 +273,12 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
               </CardFooter>
             </form>
           </Form>
-          {renderPrediction(strategyPrediction, "Prédiction Basée sur la Stratégie")}
+          {isLoadingStrategy && <div className="p-6 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
+          {!isLoadingStrategy && renderPrediction(strategyPrediction, "Prédiction Basée sur la Stratégie")}
         </Card>
       </TabsContent>
     </Tabs>
   );
 }
+
+    
