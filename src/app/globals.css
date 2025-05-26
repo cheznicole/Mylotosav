@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,24 +9,24 @@ body {
 
 @layer base {
   :root {
-    /* Dark Theme Variables (Professional Dark) */
-    --background: 60 10% 10%; /* Dark Slate Gray / Very Dark Desaturated Blue */
-    --foreground: 60 50% 90%; /* Light Gray */
+    /* Dark Theme Variables (Dark Indigo) */
+    --background: 245 40% 12%; /* Dark Indigo */
+    --foreground: 245 20% 90%; /* Light cool gray for text, good contrast with dark indigo */
 
-    --card: 60 10% 12%; /* Slightly Lighter Dark Slate */
-    --card-foreground: 60 50% 90%; /* Light Gray */
+    --card: 245 35% 15%; /* Slightly Lighter Dark Indigo for cards */
+    --card-foreground: 245 20% 90%; /* Light cool gray */
 
-    --popover: 60 10% 8%; /* Even Darker for popovers */
-    --popover-foreground: 60 50% 90%; /* Light Gray */
+    --popover: 245 40% 10%; /* Even Darker Indigo for popovers */
+    --popover-foreground: 245 20% 90%; /* Light cool gray */
 
     --primary: 45 100% 60%; /* #FFC133 - Saffron (Keep vibrant for contrast) */
     --primary-foreground: 45 100% 10%; /* Dark text on primary */
 
-    --secondary: 60 10% 20%; /* Medium Dark Gray */
-    --secondary-foreground: 60 50% 80%; /* Lighter Gray */
+    --secondary: 245 30% 25%; /* Medium Dark Indigo */
+    --secondary-foreground: 245 15% 80%; /* Lighter cool gray */
 
-    --muted: 60 10% 25%; /* Dark Gray for muted elements */
-    --muted-foreground: 60 50% 60%; /* Medium Gray for muted text */
+    --muted: 245 25% 30%; /* Dark Indigo for muted elements */
+    --muted-foreground: 245 15% 65%; /* Medium cool gray for muted text */
 
     --accent: 39 78% 52%; /* #E0A227 - Golden Orange (Keep for highlights) */
     --accent-foreground: 39 78% 10%; /* Dark text on accent */
@@ -33,20 +34,20 @@ body {
     --destructive: 0 60% 50%; /* Darker Red for destructive actions */
     --destructive-foreground: 0 0% 98%; /* Light text on destructive */
 
-    --border: 60 10% 30%; /* Dark Gray for borders */
-    --input: 60 10% 25%; /* Dark Gray for input backgrounds */
+    --border: 245 25% 35%; /* Dark Indigo for borders */
+    --input: 245 25% 30%; /* Dark Indigo for input backgrounds (same as muted) */
     --ring: 45 100% 60%; /* Primary color for focus rings */
 
     --radius: 0.5rem;
 
-    /* Sidebar specific colors - dark theme */
-    --sidebar-background: 60 10% 8%; /* Very Dark for Sidebar */
-    --sidebar-foreground: 60 50% 85%; /* Light gray for sidebar text */
+    /* Sidebar specific colors - dark indigo theme */
+    --sidebar-background: 245 45% 9%; /* Very Dark Indigo for Sidebar */
+    --sidebar-foreground: 245 15% 85%; /* Light cool gray for sidebar text */
     --sidebar-primary: 45 100% 55%; /* Slightly darker primary for sidebar active elements */
     --sidebar-primary-foreground: 45 100% 10%;
     --sidebar-accent: 39 78% 48%; /* Slightly darker accent for sidebar hover */
     --sidebar-accent-foreground: 39 78% 10%;
-    --sidebar-border: 60 10% 20%; /* Dark border for sidebar */
+    --sidebar-border: 245 30% 20%; /* Dark indigo border for sidebar */
     --sidebar-ring: 45 100% 55%;
 
     /* Chart colors for dark theme */
@@ -57,8 +58,6 @@ body {
     --chart-5: 150 60% 50%; /* A complementary teal/green */
   }
 
-  /* Remove .dark class wrapper, apply dark theme directly */
-  /* html[class~="dark"] { ... } */
 }
 
 @layer base {
