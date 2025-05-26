@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -12,11 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
 import LotteryNumberDisplay from '@/components/features/lottery/LotteryNumberDisplay';
 import { Loader2, Wand2, FileText, AlertTriangle } from 'lucide-react';
-import type { AIPrediction, StrategyPrediction } from '@/types'; // Assuming DrawResult is handled by API
-import type { DrawResult as ApiDrawResult } from '@/services/lotteryApi';
+import type { AIPrediction, StrategyPrediction } from '@/types';
 import { fetchLotteryResults as fetchActualLotteryResults } from '@/services/lotteryApi';
-import { getPastResultsStringForAI } from '@/lib/mockApi'; // To prepopulate past results FOR NOW - should use lotteryApi
-// TODO: Replace mockApi with actual lotteryApi for fetching past results relevant to drawName
+import { generateLottoPredictions } from '@/ai/flows/generate-lotto-predictions';
+import { predictLottoNumbersWithStrategy } from '@/ai/flows/prompt-for-lotto-strategy';
 
 interface PredictionEngineProps {
   drawName: string;
@@ -86,7 +86,6 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
     if (initialPastResults && pastResultsForm.getValues("pastResults") === "") {
        pastResultsForm.reset({ pastResults: initialPastResults });
     }
-  // pastResultsForm is now defined before this useEffect
   }, [initialPastResults, pastResultsForm]);
 
 
