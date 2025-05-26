@@ -9,5 +9,6 @@ export const getNumberColor = (number: number): { background: string; text: stri
   if (number >= 60 && number <= 69) return { background: 'bg-indigo-600', text: 'text-white' };
   if (number >= 70 && number <= 79) return { background: 'bg-gray-600', text: 'text-white' };
   if (number >= 80 && number <= 90) return { background: 'bg-red-600', text: 'text-white' };
-  return { background: 'bg-gray-200', text: 'text-gray-800' }; // Default for numbers outside range
+  return { background: 'bg-gray-200', text: 'text-gray-800' }; // Default for numbers outside specified Loto Bonheur range
 };
+
