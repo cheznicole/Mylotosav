@@ -127,7 +127,32 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
   };
 
   const renderPrediction = (prediction: AIPrediction | StrategyPrediction | null, title: string, analysis?: string) => {
-    if (!prediction) return null;
+    if (!prediction || !Array.isArray(prediction.predictedNumbers) || !Array.isArray(prediction.confidenceScores)) {
+       // console.warn("RenderPrediction called with invalid or incomplete prediction data:", prediction);
+      return null;
+    }
+    
+    // Ensure arrays are not empty to prevent mapping errors if API somehow returns empty arrays
+    if (prediction.predictedNumbers.length === 0 || prediction.confidenceScores.length === 0) {
+      // console.warn("RenderPrediction called with empty predictedNumbers or confidenceScores:", prediction);
+      return (
+        <Card className="mt-6 shadow-md">
+          <CardHeader>
+            <CardTitle className="text-lg text-primary">{title}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Aucune donnée de prédiction à afficher.</p>
+            {analysis && (
+            <div>
+              <h4 className="font-semibold mb-2 mt-4">Analyse:</h4>
+              <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md">{analysis}</p>
+            </div>
+          )}
+          </CardContent>
+        </Card>
+      );
+    }
+
     return (
       <Card className="mt-6 shadow-md">
         <CardHeader>
@@ -138,7 +163,7 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
             <h4 className="font-semibold mb-2">Numéros Prédits:</h4>
             <div className="flex flex-wrap gap-2">
               {prediction.predictedNumbers.map((num, index) => (
-                <LotteryNumberDisplay key={`${num}-${index}`} number={num} />
+                <LotteryNumberDisplay key={`${num}-${index}-${Math.random()}`} number={num} />
               ))}
             </div>
           </div>
@@ -146,8 +171,8 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
             <h4 className="font-semibold mb-2">Scores de Confiance:</h4>
             <div className="flex flex-wrap gap-2">
               {prediction.confidenceScores.map((score, index) => (
-                <div key={`conf-${index}`} className="p-2 border rounded-md bg-muted/50 text-sm">
-                  <span className="font-medium">{prediction.predictedNumbers[index]}:</span> {(score * 100).toFixed(1)}%
+                <div key={`conf-${index}-${Math.random()}`} className="p-2 border rounded-md bg-muted/50 text-sm">
+                  <span className="font-medium">{prediction.predictedNumbers[index] ?? 'N/A'}:</span> {(score * 100).toFixed(1)}%
                 </div>
               ))}
             </div>
@@ -279,5 +304,3 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
     </Tabs>
   );
 }
-
-    

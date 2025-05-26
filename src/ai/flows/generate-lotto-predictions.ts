@@ -24,7 +24,7 @@ export type GenerateLottoPredictionsInput = z.infer<
 >;
 
 const GenerateLottoPredictionsOutputSchema = z.object({
-  predictions: z.array(z.number()).describe('The predicted numbers for the next draw.'),
+  predictedNumbers: z.array(z.number()).describe('The predicted numbers for the next draw.'),
   confidenceScores: z
     .array(z.number())
     .describe('The confidence scores for each predicted number.'),
@@ -52,6 +52,7 @@ const generateLottoPredictionsPrompt = ai.definePrompt({
 
   Ensure predictions adhere to Loto Bonheur rules.
   Return an analysis of why these numbers were predicted.
+  The output field for predicted numbers should be 'predictedNumbers'.
   Predictions:`,
 });
 
