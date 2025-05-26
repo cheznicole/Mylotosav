@@ -97,7 +97,6 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
           const dayMonth = parts[1]; 
           const [dayStr, monthStr] = dayMonth.split('/');
           
-          // Use current year dynamically
           const parsedDate = parse(`${dayStr}/${monthStr}/${currentSystemYear}`, 'dd/MM/yyyy', new Date());
           if (!isValid(parsedDate)) {
             console.warn(`Invalid parsed date for: ${dateStr} with year ${currentSystemYear}`);
@@ -131,15 +130,15 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
               draw_name: drawName,
               date: drawDate,
               gagnants: winningNumbers,
-              machine: machineNumbers.length > 0 ? machineNumbers : undefined, // machine numbers are optional
+              machine: machineNumbers.length > 0 ? machineNumbers : undefined,
             });
           }
         }
       }
     }
     
-    if (!month) { // If this was a full fetch (not month-specific)
-        adminOverriddenResults = [...fetchedResults]; // Store these as the base if no admin data existed
+    if (!month) { 
+        adminOverriddenResults = [...fetchedResults]; 
         isDataFetchedFromApi = true;
     }
 
@@ -155,7 +154,6 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
         console.error(`Error fetching ${url}:`, error);
     }
     if (adminOverriddenResults === null && !month) adminOverriddenResults = [];
-    // On error, return current admin state if available, or empty if not.
     return adminOverriddenResults ? [...adminOverriddenResults].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
   }
 }
@@ -173,7 +171,7 @@ export async function addLotteryResult(newResultData: Omit<DrawResult, 'id'>): P
 
 export async function addMultipleDrawResults(newRawResults: Array<Omit<DrawResult, 'id'>>): Promise<DrawResult[]> {
   if (adminOverriddenResults === null) {
-    await fetchLotteryResults(); // Ensure cache is initialized
+    await fetchLotteryResults(); 
   }
   const addedResults: DrawResult[] = [];
   newRawResults.forEach(rawResult => {
@@ -219,16 +217,21 @@ export async function getAllLotteryResultsForExport(): Promise<DrawResult[]> {
   return adminOverriddenResults ? [...adminOverriddenResults] : [];
 }
 
+export async function clearAdminCache(): Promise<void> {
+  adminOverriddenResults = null;
+  isDataFetchedFromApi = false; // Reset this flag so next fetch goes to API
+}
+
 
 // Analyse fréquentielle - Exported for statistics page
 export function analyzeFrequencies(draws: DrawResult[]): { [key: number]: number } {
   const allNumbers = draws.flatMap(draw => draw.gagnants);
   const frequency: { [key: number]: number } = {};
-  for (let i = 1; i <= 90; i++) { // Initialize for all numbers 1-90
+  for (let i = 1; i <= 90; i++) { 
     frequency[i] = 0;
   }
   allNumbers.forEach(num => { 
-    if (num >=1 && num <= 90) { // Ensure number is within valid range
+    if (num >=1 && num <= 90) { 
       frequency[num] = (frequency[num] || 0) + 1; 
     }
   });
@@ -238,7 +241,6 @@ export function analyzeFrequencies(draws: DrawResult[]): { [key: number]: number
 // Analyse des tirages successifs
 function analyzeSuccessivePairs(draws: DrawResult[]): Array<{ date1: string; date2: string; common_numbers: number[] }> {
   const pairs: Array<{ date1: string; date2: string; common_numbers: number[] }> = [];
-  // Sort by date, then by draw_name to ensure correct pairing for draws on the same day but different types
   const sortedDraws = [...draws].sort((a, b) => {
     const dateComparison = new Date(a.date).getTime() - new Date(b.date).getTime();
     if (dateComparison !== 0) return dateComparison;
@@ -246,7 +248,6 @@ function analyzeSuccessivePairs(draws: DrawResult[]): Array<{ date1: string; dat
   });
 
   for (let i = 0; i < sortedDraws.length - 1; i++) {
-    // Only compare if it's the exact same draw_name for successive analysis relevant to that specific draw type
     if (sortedDraws[i].draw_name === sortedDraws[i+1].draw_name) { 
         const currentDraw = new Set(sortedDraws[i].gagnants);
         const nextDraw = new Set(sortedDraws[i + 1].gagnants);
@@ -269,24 +270,21 @@ function bayesianProbabilities(frequencies: { [key: number]: number }, pastPredi
   const totalDraws = totalWinningNumbers > 0 ? Math.max(1, totalWinningNumbers / 5) : 0; 
   
   const probabilities: { [key: number]: number } = {};
-  const alpha = 1; // Laplace smoothing parameter (prior count)
-  const N = 90; // Total possible numbers (1-90)
+  const alpha = 1; 
+  const N = 90; 
 
   for (let num = 1; num <= N; num++) {
     const observedCount = frequencies[num] || 0;
-    let errorAdjustmentScore = 0; // Sum of adjustments
+    let errorAdjustmentScore = 0; 
 
     pastPredictions.forEach(pred => {
       if (pred.actual) { 
-        if (pred.predicted.includes(num) && !pred.actual.includes(num)) errorAdjustmentScore -= 0.05; // Penalty
-        if (!pred.predicted.includes(num) && pred.actual.includes(num)) errorAdjustmentScore += 0.05; // Bonus
+        if (pred.predicted.includes(num) && !pred.actual.includes(num)) errorAdjustmentScore -= 0.05; 
+        if (!pred.predicted.includes(num) && pred.actual.includes(num)) errorAdjustmentScore += 0.05; 
       }
     });
     
-    // The adjustment is a factor related to the prediction history, not directly scaling the count by totalDraws here.
-    // It's more like an adjustment to the probability itself or the "trust" in the observed frequency.
-    // Let's adjust the observedCount slightly.
-    const adjustedObservedCount = Math.max(0, observedCount + (observedCount * errorAdjustmentScore)); // Proportional adjustment
+    const adjustedObservedCount = Math.max(0, observedCount + (observedCount * errorAdjustmentScore)); 
 
     probabilities[num] = (adjustedObservedCount + alpha) / (totalDraws + N * alpha);
     if(probabilities[num] < 0) probabilities[num] = 0; 
@@ -298,16 +296,15 @@ function bayesianProbabilities(frequencies: { [key: number]: number }, pastPredi
 function generateCombination(probabilities: { [key: number]: number }): number[] {
   const numbers = Object.keys(probabilities).map(Number).filter(n => n >= 1 && n <=90);
   
-  const popularNumbers = [1, 2, 3, 4, 5, 7, 13, 15, 23, 27, 31]; // Example popular numbers
+  const popularNumbers = [1, 2, 3, 4, 5, 7, 13, 15, 23, 27, 31]; 
   const adjustedProbabilitiesMap: {[key: number]: number } = {};
   
   numbers.forEach(num => {
-      // Reduce weight of popular numbers, ensure probability is not negative
       adjustedProbabilitiesMap[num] = Math.max(0, popularNumbers.includes(num) ? (probabilities[num] || 0) * 0.8 : (probabilities[num] || 0));
   });
 
   let availableNumbers = Object.keys(adjustedProbabilitiesMap).map(Number);
-  let availableProbs = availableNumbers.map(num => Math.max(0, adjustedProbabilitiesMap[num] || 0)); // Ensure positive probabilities
+  let availableProbs = availableNumbers.map(num => Math.max(0, adjustedProbabilitiesMap[num] || 0)); 
 
   const combination: number[] = [];
   
@@ -325,14 +322,13 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
 
   for (let k=0; k<5; k++) {
     const currentTotalProbSum = availableProbs.reduce((sum, p) => sum + p, 0);
-    // If all remaining probabilities are zero (or negative, which they shouldn't be), fill randomly
     if (currentTotalProbSum <= 0) { 
         const remainingAvailableForFill = availableNumbers.filter(n => !combination.includes(n));
         while(combination.length < 5 && remainingAvailableForFill.length > 0) {
             const randIdx = Math.floor(Math.random() * remainingAvailableForFill.length);
             combination.push(remainingAvailableForFill.splice(randIdx, 1)[0]);
         }
-        break; // Exit outer loop
+        break; 
     }
 
     const r = Math.random() * currentTotalProbSum;
@@ -347,20 +343,16 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
       }
     }
     
-    // Handle case where chosenIndex might not be found if all probs are 0 or due to floating point issues.
-    // Or if somehow availableNumbers is empty but loop continues.
     if (chosenIndex !== -1 && availableNumbers[chosenIndex] !== undefined) {
       combination.push(availableNumbers[chosenIndex]);
       availableNumbers.splice(chosenIndex, 1); 
       availableProbs.splice(chosenIndex, 1); 
     } else if (availableNumbers.length > 0) { 
-        // Fallback: pick a random one from remaining available if weighted selection fails
         let fallbackIndex = Math.floor(Math.random() * availableNumbers.length);
         combination.push(availableNumbers[fallbackIndex]);
         availableNumbers.splice(fallbackIndex, 1);
         if (availableProbs.length > fallbackIndex) availableProbs.splice(fallbackIndex, 1);
     } else {
-      // Should not happen if initial check for availableNumbers.length < 5 is correct
       break; 
     }
   }
@@ -397,7 +389,7 @@ export async function savePrediction(prediction: Omit<Prediction, 'id'>): Promis
     return new Promise<number>((resolve, reject) => {
       const transaction = db.transaction([PREDICTIONS_STORE_NAME], 'readwrite');
       const store = transaction.objectStore(PREDICTIONS_STORE_NAME);
-      const addRequest = store.add(prediction); // ID will be auto-generated
+      const addRequest = store.add(prediction); 
       addRequest.onsuccess = () => resolve(addRequest.result as number);
       addRequest.onerror = (event) => reject(new Error(`Failed to save prediction: ${(event.target as IDBRequest).error?.message}`));
       transaction.oncomplete = () => db.close();
@@ -470,6 +462,27 @@ export async function updatePredictionActual(id: number, actual: number[]): Prom
   } catch (error) {
      console.warn(`Could not update prediction (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}`);
      throw error;
+  }
+}
+
+export async function clearAllPredictions(): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction([PREDICTIONS_STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(PREDICTIONS_STORE_NAME);
+      const clearRequest = store.clear();
+      clearRequest.onsuccess = () => resolve();
+      clearRequest.onerror = (event) => reject(new Error(`Failed to clear predictions: ${(event.target as IDBRequest).error?.message}`));
+      transaction.oncomplete = () => db.close();
+      transaction.onerror = (event) => {
+        console.error("Transaction error (clearAllPredictions):", (event.target as IDBTransaction).error);
+        reject(new Error(`Transaction error (clear predictions): ${(event.target as IDBTransaction).error?.message}`));
+      };
+    });
+  } catch (error) {
+    console.warn(`Could not clear predictions (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}`);
+    // Do not re-throw, allow UI to report success if DB is just unavailable
   }
 }
 
