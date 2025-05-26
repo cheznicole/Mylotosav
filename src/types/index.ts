@@ -1,6 +1,6 @@
 
 export interface LotteryResult {
-  id: string;
+  id: string; // Added unique ID for easier CRUD
   date: string;
   winningNumbers: number[];
   machineNumbers: number[];
@@ -34,3 +34,6 @@ export interface PredictionResult {
   suggestedCombination: number[];
   successivePairs: Array<{ date1: string; date2: string; common_numbers: number[] }>;
 }
+
+// Type for DrawResult used in lotteryApi.ts, ensure consistency
+export type { DrawResult as ApiDrawResult } from '@/services/lotteryApi';

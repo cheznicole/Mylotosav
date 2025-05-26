@@ -1,8 +1,9 @@
+
 "use client";
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Ticket, Settings, PanelLeft, CalendarDays, Clock } from 'lucide-react';
+import { Ticket, Settings, PanelLeft, CalendarDays, Clock, Shield } from 'lucide-react'; // Added Shield
 import {
   Sidebar,
   SidebarHeader,
@@ -17,11 +18,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { DRAW_SCHEDULE } from '@/services/lotteryApi'; // Import DRAW_SCHEDULE
+import { DRAW_SCHEDULE } from '@/services/lotteryApi';
 import { slugify } from '@/lib/utils';
 
-// Helper to sort days of the week as they appear in DRAW_SCHEDULE
-const orderedDays = Object.keys(DRAW_SCHEDULE); // Assumes DRAW_SCHEDULE keys are in desired order
+const orderedDays = Object.keys(DRAW_SCHEDULE);
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -52,7 +52,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <Separator />
       <SidebarContent className="p-2">
-        <Accordion type="multiple" className="w-full">
+        <Accordion type="multiple" className="w-full" defaultValue={orderedDays}>
           {orderedDays.map((day) => (
             <AccordionItem value={day} key={day}>
               <AccordionTrigger className={cn(
@@ -98,6 +98,22 @@ export function AppSidebar() {
       <Separator />
       <SidebarFooter className="p-2 mt-auto">
         <SidebarMenu>
+          <SidebarMenuItem>
+            <Link href="/admin" passHref legacyBehavior>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === '/admin'}
+                tooltip={{ children: "Admin Panel", className: "bg-card text-card-foreground border-border" }}
+                onClick={handleLinkClick}
+                className="justify-start"
+              >
+                <a>
+                  <Shield className="w-5 h-5" />
+                  <span className={cn(!open && !isMobile && "sr-only")}>Admin</span>
+                </a>
+              </SidebarMenuButton>
+            </Link>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <Link href="/settings" passHref legacyBehavior>
               <SidebarMenuButton
