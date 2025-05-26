@@ -165,10 +165,10 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
 // Admin CRUD functions
 export async function addLotteryResult(newResultData: Omit<DrawResult, 'id'>): Promise<DrawResult> {
   if (adminOverriddenResults === null) {
-    adminOverriddenResults = []; // Or fetch existing ones first: await fetchLotteryResults();
+    await fetchLotteryResults(); // Ensure some data (even if empty from API) is there before adding
   }
   const newResult: DrawResult = { ...newResultData, id: crypto.randomUUID() };
-  adminOverriddenResults.push(newResult);
+  adminOverriddenResults = [...(adminOverriddenResults || []), newResult];
   // Sort by date descending after adding
   adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return newResult;
@@ -254,7 +254,8 @@ function analyzeSuccessivePairs(draws: DrawResult[]): Array<{ date1: string; dat
 // Modélisation bayésienne avec apprentissage des erreurs
 function bayesianProbabilities(frequencies: { [key: number]: number }, pastPredictions: Prediction[]): { [key: number]: number } {
   const totalWinningNumbers = Object.values(frequencies).reduce((sum, count) => sum + count, 0);
-  const totalDraws = totalWinningNumbers > 0 ? totalWinningNumbers / 5 : 0; 
+  // Ensure totalDraws is at least 1 if there are frequencies, otherwise 0. Avoid division by zero.
+  const totalDraws = totalWinningNumbers > 0 ? Math.max(1, totalWinningNumbers / 5) : 0; 
   
   const probabilities: { [key: number]: number } = {};
   const alpha = 1; // Laplace smoothing parameter (prior count)
@@ -271,9 +272,13 @@ function bayesianProbabilities(frequencies: { [key: number]: number }, pastPredi
       }
     });
     
-    const adjustedObservedCount = Math.max(0, observedCount + (errorAdjustmentFactor * totalDraws)); 
+    // Apply error adjustment factor to the observed count, scaled by total draws.
+    // Ensure adjustedObservedCount is not negative.
+    const adjustedObservedCount = Math.max(0, observedCount + (errorAdjustmentFactor * totalDraws));
 
-    probabilities[num] = (adjustedObservedCount + alpha) / (Math.max(1, totalDraws) + N * alpha); // ensure totalDraws is at least 1
+    // Calculate Bayesian probability with Laplace smoothing
+    probabilities[num] = (adjustedObservedCount + alpha) / (totalDraws + N * alpha);
+    // Ensure probability is not negative (though division by positive denominator should prevent this if adjustedObservedCount is >= 0)
     if(probabilities[num] < 0) probabilities[num] = 0; 
   }
   return probabilities;
@@ -284,23 +289,25 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
   const numbers = Object.keys(probabilities).map(Number).filter(n => n >= 1 && n <=90);
   
   const popularNumbers = [1, 2, 3, 4, 5, 7, 13, 15, 23, 27, 31];
-  const adjustedProbabilities = numbers.reduce((acc, num) => {
-      acc[num] = popularNumbers.includes(num) ? (probabilities[num] || 0) * 0.8 : (probabilities[num] || 0);
-      return acc;
-  }, {} as {[key: number]: number });
+  const adjustedProbabilitiesMap: {[key: number]: number } = {};
+  
+  numbers.forEach(num => {
+      adjustedProbabilitiesMap[num] = popularNumbers.includes(num) ? (probabilities[num] || 0) * 0.8 : (probabilities[num] || 0);
+  });
 
-  const availableNumbers = Object.keys(adjustedProbabilities).map(Number);
-  let availableProbs = availableNumbers.map(num => Math.max(0, adjustedProbabilities[num] || 0));
+  let availableNumbers = Object.keys(adjustedProbabilitiesMap).map(Number);
+  let availableProbs = availableNumbers.map(num => Math.max(0, adjustedProbabilitiesMap[num] || 0));
 
   const combination: number[] = [];
   
-  if (availableNumbers.length < 5) { // Not enough numbers to pick from
-    console.warn("Not enough unique numbers with positive probability to generate a 5-number combination. Returning random set.");
+  if (availableNumbers.length < 5) { 
+    console.warn("Not enough unique numbers with positive probability to generate a 5-number combination. Returning random set from available or all numbers.");
     const randomSet = new Set<number>();
-    const allPossibleNumbers = Array.from({length: 90}, (_, i) => i + 1);
-    while(randomSet.size < 5 && allPossibleNumbers.length > 0) {
-        const randomIndex = Math.floor(Math.random() * allPossibleNumbers.length);
-        randomSet.add(allPossibleNumbers.splice(randomIndex, 1)[0]);
+    let sourceForRandom = availableNumbers.length > 0 ? [...availableNumbers] : Array.from({length: 90}, (_, i) => i + 1);
+    
+    while(randomSet.size < 5 && sourceForRandom.length > 0) {
+        const randomIndex = Math.floor(Math.random() * sourceForRandom.length);
+        randomSet.add(sourceForRandom.splice(randomIndex, 1)[0]);
     }
     return Array.from(randomSet).sort((a,b) => a-b);
   }
@@ -308,12 +315,11 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
 
   for (let k=0; k<5; k++) {
     const currentTotalProbSum = availableProbs.reduce((sum, p) => sum + p, 0);
-    if (currentTotalProbSum <= 0) { // No more numbers to pick from based on probability
-        // Fill remaining spots with random available numbers not already in combination
-        const remainingAvailable = availableNumbers.filter(n => !combination.includes(n));
-        while(combination.length < 5 && remainingAvailable.length > 0) {
-            const randIdx = Math.floor(Math.random() * remainingAvailable.length);
-            combination.push(remainingAvailable.splice(randIdx, 1)[0]);
+    if (currentTotalProbSum <= 0) { 
+        const remainingAvailableForFill = availableNumbers.filter(n => !combination.includes(n));
+        while(combination.length < 5 && remainingAvailableForFill.length > 0) {
+            const randIdx = Math.floor(Math.random() * remainingAvailableForFill.length);
+            combination.push(remainingAvailableForFill.splice(randIdx, 1)[0]);
         }
         break;
     }
@@ -332,12 +338,17 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
     
     if (chosenIndex !== -1) {
       combination.push(availableNumbers[chosenIndex]);
-      // Remove chosen number and its probability for next pick
       availableNumbers.splice(chosenIndex, 1); 
       availableProbs.splice(chosenIndex, 1); 
-    } else if (availableNumbers.length > 0) { // Fallback (if something went wrong with random selection)
-        let fallbackIndex = availableProbs.length > 0 && Math.max(...availableProbs) > 0 ? availableProbs.indexOf(Math.max(...availableProbs)) : 0;
-        if (fallbackIndex >= availableNumbers.length) fallbackIndex = 0; // Safety for empty probs
+    } else if (availableNumbers.length > 0) { 
+        let fallbackIndex = 0;
+        if (availableProbs.length > 0) {
+            const maxProb = Math.max(...availableProbs);
+            if (maxProb > 0) {
+                 fallbackIndex = availableProbs.indexOf(maxProb);
+            }
+        }
+        if (fallbackIndex >= availableNumbers.length) fallbackIndex = 0;
 
         combination.push(availableNumbers[fallbackIndex]);
         availableNumbers.splice(fallbackIndex, 1);
@@ -350,18 +361,20 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
 // --- IndexedDB ---
 const DB_NAME = 'LotoAnalyseDB';
 const DB_VERSION = 1;
-const PREDICTIONS_STORE_NAME = 'predictions_v1';
+const PREDICTIONS_STORE_NAME = 'predictions_v1'; // Store name with versioning
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || !window.indexedDB) {
-      return reject(new Error('IndexedDB is not supported in this environment.'));
+      console.warn('IndexedDB is not supported in this environment. Prediction history will not be saved.');
+      return reject(new Error('IndexedDB is not supported.'));
     }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = event => {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(PREDICTIONS_STORE_NAME)) {
         const store = db.createObjectStore(PREDICTIONS_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        // Index to query predictions by draw_name and date if needed
         store.createIndex('drawNameDateIndex', ['draw_name', 'date'], { unique: false });
       }
     };
@@ -380,11 +393,15 @@ export async function savePrediction(prediction: Omit<Prediction, 'id'>): Promis
       addRequest.onsuccess = () => resolve(addRequest.result as number);
       addRequest.onerror = (event) => reject(new Error(`Failed to save prediction: ${(event.target as IDBRequest).error?.message}`));
       transaction.oncomplete = () => db.close();
-      transaction.onerror = (event) => reject(new Error(`Transaction error (save): ${(event.target as IDBTransaction).error?.message}`));
+      transaction.onerror = (event) => {
+        console.error("Transaction error (savePrediction):", (event.target as IDBTransaction).error);
+        reject(new Error(`Transaction error (save): ${(event.target as IDBTransaction).error?.message}`));
+      };
     });
   } catch (error) {
     console.warn(`Could not save prediction (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}`);
-    throw error;
+    // Depending on requirements, either re-throw or return a specific value indicating failure
+    throw error; // Or return -1 / Promise.reject(error), etc.
   }
 }
 
@@ -399,13 +416,17 @@ export async function getPastPredictions(drawName?: string): Promise<Prediction[
       request.onsuccess = () => {
         let results = (request.result || []) as Prediction[];
         if (drawName) {
-            results = results.filter(p => p.draw_name === drawName);
+            // Ensure p.draw_name exists before filtering
+            results = results.filter(p => p && p.draw_name === drawName);
         }
         resolve(results);
       };
       request.onerror = (event) => reject(new Error(`Failed to retrieve predictions: ${(event.target as IDBRequest).error?.message}`));
       transaction.oncomplete = () => db.close();
-      transaction.onerror = (event) => reject(new Error(`Transaction error (get): ${(event.target as IDBTransaction).error?.message}`));
+      transaction.onerror = (event) => {
+        console.error("Transaction error (getPastPredictions):", (event.target as IDBTransaction).error);
+        reject(new Error(`Transaction error (get): ${(event.target as IDBTransaction).error?.message}`));
+      };
     });
   } catch (error) {
     console.warn(`Could not get past predictions (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}. Returning empty array.`);
@@ -435,10 +456,14 @@ export async function updatePredictionActual(id: number, actual: number[]): Prom
       getRequest.onerror = (event) => reject(new Error(`Failed to get prediction for update: ${(event.target as IDBRequest).error?.message}`));
       
       transaction.oncomplete = () => db.close();
-      transaction.onerror = (event) => reject(new Error(`Transaction error (update): ${(event.target as IDBTransaction).error?.message}`));
+      transaction.onerror = (event) => {
+         console.error("Transaction error (updatePredictionActual):", (event.target as IDBTransaction).error);
+         reject(new Error(`Transaction error (update): ${(event.target as IDBTransaction).error?.message}`));
+      };
     });
   } catch (error) {
      console.warn(`Could not update prediction (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}`);
+     // Depending on requirements, re-throw or handle gracefully
      throw error;
   }
 }
@@ -450,6 +475,7 @@ export async function generatePrediction(drawName: string, month?: string): Prom
   
   if (filteredDraws.length === 0) {
       console.warn(`No historical data found for draw '${drawName}' for the specified period/filters to generate prediction.`);
+      // Return a default structure for PredictionResultType
       return { 
           bayesianProbabilities: {},
           suggestedCombination: [],
@@ -469,3 +495,5 @@ export async function generatePrediction(drawName: string, month?: string): Prom
     successivePairs: successivePairs,
   };
 }
+
+    
