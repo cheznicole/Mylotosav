@@ -128,13 +128,10 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
 
   const renderPrediction = (prediction: AIPrediction | StrategyPrediction | null, title: string, analysis?: string) => {
     if (!prediction || !Array.isArray(prediction.predictedNumbers) || !Array.isArray(prediction.confidenceScores)) {
-       // console.warn("RenderPrediction called with invalid or incomplete prediction data:", prediction);
       return null;
     }
     
-    // Ensure arrays are not empty to prevent mapping errors if API somehow returns empty arrays
     if (prediction.predictedNumbers.length === 0 || prediction.confidenceScores.length === 0) {
-      // console.warn("RenderPrediction called with empty predictedNumbers or confidenceScores:", prediction);
       return (
         <Card className="mt-6 shadow-md">
           <CardHeader>
@@ -163,7 +160,7 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
             <h4 className="font-semibold mb-2">Numéros Prédits:</h4>
             <div className="flex flex-wrap gap-2">
               {prediction.predictedNumbers.map((num, index) => (
-                <LotteryNumberDisplay key={`${num}-${index}-${Math.random()}`} number={num} />
+                <LotteryNumberDisplay key={`pred-num-${num}-idx-${index}`} number={num} />
               ))}
             </div>
           </div>
@@ -171,7 +168,7 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
             <h4 className="font-semibold mb-2">Scores de Confiance:</h4>
             <div className="flex flex-wrap gap-2">
               {prediction.confidenceScores.map((score, index) => (
-                <div key={`conf-${index}-${Math.random()}`} className="p-2 border rounded-md bg-muted/50 text-sm">
+                <div key={`conf-score-${prediction.predictedNumbers[index]}-idx-${index}`} className="p-2 border rounded-md bg-muted/50 text-sm">
                   <span className="font-medium">{prediction.predictedNumbers[index] ?? 'N/A'}:</span> {(score * 100).toFixed(1)}%
                 </div>
               ))}
@@ -188,7 +185,7 @@ export default function PredictionEngine({ drawName }: PredictionEngineProps) {
     );
   };
   
-  if (error && !isLoadingModel && !isLoadingStrategy) { // Show error only if not loading
+  if (error && !isLoadingModel && !isLoadingStrategy) { 
     return (
          <Card>
             <CardHeader>

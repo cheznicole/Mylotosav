@@ -108,20 +108,20 @@ export default function ResultsDisplay({ drawName }: ResultsDisplayProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedResults.map((result, index) => ( // Added index for key uniqueness if dates aren't unique enough
-                <TableRow key={`${result.date}-${result.draw_name}-${index}`}>
+              {paginatedResults.map((result, index) => ( 
+                <TableRow key={`${result.id}-${index}`}>
                   <TableCell>{new Date(result.date).toLocaleDateString()}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-2">
-                      {result.gagnants.map((num) => (
-                        <LotteryNumberDisplay key={num} number={num} size="sm" />
+                      {result.gagnants.map((num, numIndex) => (
+                        <LotteryNumberDisplay key={`gagnant-${result.id}-${num}-${numIndex}`} number={num} size="sm" />
                       ))}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-2">
-                      {result.machine && result.machine.map((num) => (
-                        <LotteryNumberDisplay key={num} number={num} size="sm" className="opacity-75" />
+                      {result.machine && result.machine.map((num, numIndex) => (
+                        <LotteryNumberDisplay key={`machine-${result.id}-${num}-${numIndex}`} number={num} size="sm" className="opacity-75" />
                       ))}
                       {!result.machine && <span className="text-xs text-muted-foreground">N/A</span>}
                     </div>
