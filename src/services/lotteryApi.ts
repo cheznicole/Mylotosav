@@ -8,8 +8,8 @@ export interface DrawResult {
   id: string; // Unique ID for each draw result
   draw_name: string;
   date: string; // YYYY-MM-DD format
-  gagnants: number[];
-  machine?: number[];
+  gagnants: number[]; // Must be 5 numbers (1-90)
+  machine?: number[]; // 0-5 numbers (1-90)
 }
 
 export interface Prediction {
@@ -120,9 +120,9 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
             continue;
           }
 
-          const winningNumbers = (draw.winningNumbers.match(/\d+/g) || []).map(Number).slice(0, 5);
+          const winningNumbers = (draw.winningNumbers.match(/\d+/g) || []).map(Number).filter(n => n >= 1 && n <= 90);
           const machineNumbersRaw = draw.machineNumbers;
-          const machineNumbers = (typeof machineNumbersRaw === 'string' ? (machineNumbersRaw.match(/\d+/g) || []) : []).map(Number).slice(0, 5);
+          const machineNumbers = (typeof machineNumbersRaw === 'string' ? (machineNumbersRaw.match(/\d+/g) || []) : []).map(Number).filter(n => n >= 1 && n <= 90);
 
           if (winningNumbers.length === 5) { // Main validation for a usable result
             fetchedResults.push({
@@ -158,29 +158,82 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
   }
 }
 
+// Helper to compare if two number arrays are identical (order-independent)
+const compareNumberArrays = (arr1?: number[], arr2?: number[]): boolean => {
+  if (arr1 === undefined && arr2 === undefined) return true; // Both undefined
+  if (arr1 === undefined || arr2 === undefined) return false; // One is undefined, other is not
+  if (arr1.length === 0 && arr2.length === 0) return true; // Both empty
+  if (arr1.length !== arr2.length) return false;
+  const sorted1 = [...arr1].sort((a, b) => a - b).join(',');
+  const sorted2 = [...arr2].sort((a, b) => a - b).join(',');
+  return sorted1 === sorted2;
+};
+
+// Helper to check if two DrawResult objects are identical (excluding ID)
+const areResultsIdentical = (res1: Omit<DrawResult, 'id'>, res2: Omit<DrawResult, 'id'>): boolean => {
+  return res1.draw_name === res2.draw_name &&
+         res1.date === res2.date &&
+         compareNumberArrays(res1.gagnants, res2.gagnants) &&
+         compareNumberArrays(res1.machine, res2.machine);
+};
+
+
 // Admin CRUD functions
 export async function addLotteryResult(newResultData: Omit<DrawResult, 'id'>): Promise<DrawResult> {
   if (adminOverriddenResults === null) {
     await fetchLotteryResults(); 
   }
+  // Check for duplicates before adding
+  if (adminOverriddenResults && adminOverriddenResults.some(existingResult => areResultsIdentical(existingResult, newResultData))) {
+    throw new Error("Duplicate result: This lottery result already exists.");
+  }
+
   const newResult: DrawResult = { ...newResultData, id: crypto.randomUUID() };
   adminOverriddenResults = [...(adminOverriddenResults || []), newResult];
   adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return newResult;
 }
 
-export async function addMultipleDrawResults(newRawResults: Array<Omit<DrawResult, 'id'>>): Promise<DrawResult[]> {
+export async function addMultipleDrawResults(
+  newRawResults: Array<Omit<DrawResult, 'id'>>
+): Promise<{ added: DrawResult[]; duplicates: number }> {
   if (adminOverriddenResults === null) {
     await fetchLotteryResults(); 
   }
   const addedResults: DrawResult[] = [];
+  let duplicateCount = 0;
+
   newRawResults.forEach(rawResult => {
-    const newResult: DrawResult = { ...rawResult, id: crypto.randomUUID() };
-    adminOverriddenResults = [...(adminOverriddenResults || []), newResult];
-    addedResults.push(newResult);
+    // Ensure 'gagnants' always has 5 valid numbers and 'machine' has 0-5 valid numbers.
+    // This validation should ideally be done before calling this function (e.g., in AdminImageImport)
+    // but we can add a basic check here as a safeguard.
+    if (!rawResult.gagnants || rawResult.gagnants.length !== 5 || !rawResult.gagnants.every(n => n >= 1 && n <= 90)) {
+        console.warn("Skipping invalid raw result due to 'gagnants' criteria in addMultipleDrawResults:", rawResult);
+        return; // Skip this result
+    }
+    if (rawResult.machine && !rawResult.machine.every(n => n >= 1 && n <= 90)) {
+        console.warn("Skipping invalid raw result due to 'machine' criteria in addMultipleDrawResults:", rawResult);
+        return; // Skip this result
+    }
+
+
+    const isDuplicate = adminOverriddenResults?.some(existingResult =>
+      areResultsIdentical(existingResult, rawResult)
+    ) || false;
+
+    if (isDuplicate) {
+      duplicateCount++;
+    } else {
+      const newResult: DrawResult = { ...rawResult, id: crypto.randomUUID() };
+      adminOverriddenResults = [...(adminOverriddenResults || []), newResult];
+      addedResults.push(newResult);
+    }
   });
-  adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  return addedResults;
+
+  if (adminOverriddenResults) {
+    adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+  return { added: addedResults, duplicates: duplicateCount };
 }
 
 
@@ -512,3 +565,4 @@ export async function generatePrediction(drawName: string, month?: string): Prom
     successivePairs: successivePairs,
   };
 }
+

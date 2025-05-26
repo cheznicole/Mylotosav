@@ -28,8 +28,6 @@ function parseFrenchDate(dateStr: string): string | null {
     return format(parsed, 'yyyy-MM-dd');
   }
 
-  // Fallback for "dd mois yyyy" e.g. "19 Mai 2025" or "02 Décembre 2024"
-  // This regex is more flexible for inconsistent casing or spacing
   const datePartsRegex = /(\d{1,2})\s*([a-zA-Zéûû]+)\s*(\d{4})/i;
   const match = dateStr.match(datePartsRegex);
 
@@ -47,7 +45,7 @@ function parseFrenchDate(dateStr: string): string | null {
     }
   }
   console.warn(`Failed to parse date string: ${dateStr}`);
-  return null; // Return null if parsing fails
+  return null;
 }
 
 
@@ -95,54 +93,65 @@ export function AdminImageImport() {
         throw new Error("AI did not return a valid draw name or any results.");
       }
       
-      const resultsToSave: Array<Omit<DrawResult, 'id'>> = [];
+      const resultsToProcess: Array<Omit<DrawResult, 'id'>> = [];
       let parsingErrors = 0;
+      let invalidWinningNumbersCount = 0;
 
       for (const item of aiResult.results) {
         const parsedDateStr = parseFrenchDate(item.date);
         if (!parsedDateStr) {
           console.error(`Skipping result due to invalid date: ${item.date}`);
-          toast({ variant: "destructive", title: "Date Parsing Error", description: `Invalid date format for an entry: ${item.date}. This entry was skipped.` });
-          parsingErrors++;
-          continue;
-        }
-        if (item.winningNumbers.length !== 5 || item.machineNumbers.length !== 5) {
-          console.error(`Skipping result due to incorrect number count: Date ${item.date}`);
-          toast({ variant: "destructive", title: "Data Error", description: `Entry for ${item.date} has incorrect number of balls. This entry was skipped.` });
           parsingErrors++;
           continue;
         }
 
-        resultsToSave.push({
-          draw_name: aiResult.drawName, // Use the common drawName extracted by AI
+        const validWinningNumbers = item.winningNumbers.filter(n => n >= 1 && n <= 90);
+        if (validWinningNumbers.length !== 5) {
+          console.error(`Skipping result for date ${item.date} due to invalid or incomplete winning numbers (found ${validWinningNumbers.length}, expected 5 after filtering 0s/out-of-range). Original: ${item.winningNumbers.join(',')}`);
+          invalidWinningNumbersCount++;
+          continue;
+        }
+
+        const validMachineNumbers = item.machineNumbers.filter(n => n >= 1 && n <= 90);
+        // No minimum length check for machine numbers after filtering, can be empty
+
+        resultsToProcess.push({
+          draw_name: aiResult.drawName,
           date: parsedDateStr,
-          gagnants: item.winningNumbers,
-          machine: item.machineNumbers,
+          gagnants: validWinningNumbers,
+          machine: validMachineNumbers.length > 0 ? validMachineNumbers : undefined, // Store as undefined if empty
         });
       }
       
-      if (resultsToSave.length === 0 && aiResult.results.length > 0) {
-         throw new Error("No valid results could be parsed from the AI output. Check console for details.");
+      if (resultsToProcess.length === 0 && aiResult.results.length > 0) {
+         const errorDetail = invalidWinningNumbersCount > 0 ? `${invalidWinningNumbersCount} entries had invalid winning numbers.` : `${parsingErrors} entries had date parsing errors.`;
+         throw new Error(`No valid results could be processed from the AI output. ${errorDetail} Check console for details.`);
       }
       
-      if (resultsToSave.length > 0) {
-        await addMultipleDrawResults(resultsToSave);
+      let addedCount = 0;
+      let duplicateCount = 0;
+
+      if (resultsToProcess.length > 0) {
+        const { added, duplicates } = await addMultipleDrawResults(resultsToProcess);
+        addedCount = added.length;
+        duplicateCount = duplicates;
+        
         toast({
-            title: "Import Successful",
-            description: `${resultsToSave.length} results for draw "${aiResult.drawName}" imported. ${parsingErrors > 0 ? `${parsingErrors} entries skipped due to errors.` : ''}`,
-            className: "bg-green-600 text-white",
-            duration: 5000,
+            title: "Import Processed",
+            description: `${addedCount} results for "${aiResult.drawName}" imported. ${invalidWinningNumbersCount > 0 ? `${invalidWinningNumbersCount} invalid winning number entries skipped. ` : ''}${parsingErrors > 0 ? `${parsingErrors} date parsing errors. ` : ''}${duplicateCount > 0 ? `${duplicateCount} duplicates skipped.` : ''}`,
+            className: addedCount > 0 ? "bg-green-600 text-white" : (invalidWinningNumbersCount > 0 || parsingErrors > 0 || duplicateCount > 0 ? "bg-yellow-500 text-black" : "bg-muted text-muted-foreground"),
+            duration: 7000,
          });
-      } else if (parsingErrors > 0) {
+      } else if (invalidWinningNumbersCount > 0 || parsingErrors > 0) {
          toast({
             variant: "destructive",
-            title: "Import Partially Failed",
-            description: `All ${parsingErrors} entries had errors and were skipped. No data imported.`,
+            title: "Import Failed",
+            description: `All ${aiResult.results.length} entries had errors (winning numbers or dates) and were skipped. No data imported.`,
          });
       } else {
          toast({
-            title: "No Data Imported",
-            description: `No processable results found in the image for draw "${aiResult.drawName}".`,
+            title: "No New Data Imported",
+            description: `No processable results found or all were duplicates for draw "${aiResult.drawName}".`,
          });
       }
 
@@ -153,10 +162,6 @@ export function AdminImageImport() {
       console.error("Image import error:", err);
     } finally {
       setIsImporting(false);
-      // Optionally clear selection after import attempt
-      // setSelectedImage(null);
-      // setImagePreview(null);
-      // if(fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -205,7 +210,7 @@ export function AdminImageImport() {
                 <div>
                     <p className="font-semibold">Extraction Successful & Data Processed</p>
                     <p className="text-sm">Draw: {extractedData.drawName}, {extractedData.results.length} rows initially extracted by AI.</p>
-                    <p className="text-sm">Check toast notifications for import status.</p>
+                    <p className="text-sm">Check toast notifications for detailed import status.</p>
                 </div>
             </div>
         )}
