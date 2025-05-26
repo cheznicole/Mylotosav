@@ -21,7 +21,7 @@ export interface Prediction {
 }
 
 // Calendrier des tirages - Exported for use in sidebar and filters
-export const DRAW_SCHEDULE = {
+export const DRAW_SCHEDULE: { [day: string]: { [time: string]: string } }  = {
   Lundi: { '10H': 'Reveil', '13H': 'Etoile', '16H': 'Akwaba', '18H15': 'Monday Special' },
   Mardi: { '10H': 'La Matinale', '13H': 'Emergence', '16H': 'Sika', '18H15': 'Lucky Tuesday' },
   Mercredi: { '10H': 'Premiere Heure', '13H': 'Fortune', '16H': 'Baraka', '18H15': 'Midweek' },
@@ -36,19 +36,17 @@ let isDataFetchedFromApi = false;
 
 // Récupération des résultats de l'API - Exported
 export async function fetchLotteryResults(month?: string): Promise<DrawResult[]> {
-  if (adminOverriddenResults !== null && !month) { // If admin data exists and no specific month filter, use admin data
+  if (adminOverriddenResults !== null && !month) { 
     return [...adminOverriddenResults].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
-  // If specific month is requested, or no admin data, fetch from API (or use API cache if already fetched for all)
+  
   if (adminOverriddenResults !== null && isDataFetchedFromApi && month){
-     // Filter from the already fetched full dataset
      const [year, monthValue] = month.split('-').map(Number);
      return adminOverriddenResults.filter(r => {
         const rDate = new Date(r.date);
         return rDate.getFullYear() === year && rDate.getMonth() + 1 === monthValue;
      }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
-
 
   const baseUrl = 'https://lotobonheur.ci/api/results';
   const url = month ? `${baseUrl}?month=${month}` : baseUrl;
@@ -71,43 +69,44 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
     
     const drawsResultsWeekly = resultsData.drawsResultsWeekly;
     if (!drawsResultsWeekly || !Array.isArray(drawsResultsWeekly)) {
-        console.warn('drawsResultsWeekly is not an array or is undefined. No results to process.');
-        if (adminOverriddenResults === null) adminOverriddenResults = []; // Initialize if first fetch and empty
-        return [];
+        console.warn('drawsResultsWeekly is not an array or is undefined. No results to process from API.');
+        if (adminOverriddenResults === null && !month) adminOverriddenResults = []; 
+        return adminOverriddenResults ? [...adminOverriddenResults].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
     }
 
     const validDrawNames = new Set<string>();
-    Object.values(DRAW_SCHEDULE).forEach(day => Object.values(day).forEach(drawName => validDrawNames.add(drawName)));
+    Object.values(DRAW_SCHEDULE).forEach(daySchedule => Object.values(daySchedule).forEach(drawName => validDrawNames.add(drawName)));
 
     const fetchedResults: DrawResult[] = [];
-    const currentYear = getYear(new Date());
+    const currentSystemYear = getYear(new Date());
 
     for (const week of drawsResultsWeekly) {
       if (!week.drawResultsDaily || !Array.isArray(week.drawResultsDaily)) {
           continue; 
       }
       for (const dailyResult of week.drawResultsDaily) {
-        const dateStr = dailyResult.date; // e.g., "Lundi 29/07"
+        const dateStr = dailyResult.date; 
         let drawDate: string;
 
         try {
           const parts = dateStr.split(' ');
           if (parts.length < 2) {
-            console.warn(`Unexpected date format: ${dateStr}`);
+            console.warn(`Unexpected date format from API: ${dateStr}`);
             continue;
           }
           const dayMonth = parts[1]; 
           const [dayStr, monthStr] = dayMonth.split('/');
           
-          const parsedDate = parse(`${dayStr}/${monthStr}/${currentYear}`, 'dd/MM/yyyy', new Date());
+          // Use current year dynamically
+          const parsedDate = parse(`${dayStr}/${monthStr}/${currentSystemYear}`, 'dd/MM/yyyy', new Date());
           if (!isValid(parsedDate)) {
-            console.warn(`Invalid parsed date for: ${dateStr}`);
+            console.warn(`Invalid parsed date for: ${dateStr} with year ${currentSystemYear}`);
             continue;
           }
           drawDate = format(parsedDate, 'yyyy-MM-dd');
 
         } catch (e) {
-          console.warn(`Invalid date format: ${dateStr}, error: ${e instanceof Error ? e.message : String(e)}`);
+          console.warn(`Error parsing date format from API: ${dateStr}, error: ${e instanceof Error ? e.message : String(e)}`);
           continue;
         }
         
@@ -126,28 +125,26 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
           const machineNumbersRaw = draw.machineNumbers;
           const machineNumbers = (typeof machineNumbersRaw === 'string' ? (machineNumbersRaw.match(/\d+/g) || []) : []).map(Number).slice(0, 5);
 
-          if (winningNumbers.length === 5) {
+          if (winningNumbers.length === 5) { // Main validation for a usable result
             fetchedResults.push({
-              id: crypto.randomUUID(), // Generate unique ID
+              id: crypto.randomUUID(), 
               draw_name: drawName,
               date: drawDate,
               gagnants: winningNumbers,
-              machine: machineNumbers.length > 0 ? machineNumbers : undefined,
+              machine: machineNumbers.length > 0 ? machineNumbers : undefined, // machine numbers are optional
             });
           }
         }
       }
     }
     
-    // If this was a fetch for all data (no month specified), update the admin store
-    if (!month) {
-        adminOverriddenResults = [...fetchedResults];
+    if (!month) { // If this was a full fetch (not month-specific)
+        adminOverriddenResults = [...fetchedResults]; // Store these as the base if no admin data existed
         isDataFetchedFromApi = true;
     }
 
-
-    if (fetchedResults.length === 0 && !month) { // Only warn if it was a general fetch with no results
-      console.warn('Aucun résultat de tirage valide trouvé pour la période spécifiée via API.');
+    if (fetchedResults.length === 0 && !month) {
+      console.warn('Aucun résultat de tirage valide trouvé via API pour la période générale.');
     }
     return fetchedResults.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -157,22 +154,37 @@ export async function fetchLotteryResults(month?: string): Promise<DrawResult[]>
     } else {
         console.error(`Error fetching ${url}:`, error);
     }
-    if (adminOverriddenResults === null && !month) adminOverriddenResults = []; // Initialize on error if first fetch
-    return []; // Return empty array on error to allow components to handle empty state
+    if (adminOverriddenResults === null && !month) adminOverriddenResults = [];
+    // On error, return current admin state if available, or empty if not.
+    return adminOverriddenResults ? [...adminOverriddenResults].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
   }
 }
 
 // Admin CRUD functions
 export async function addLotteryResult(newResultData: Omit<DrawResult, 'id'>): Promise<DrawResult> {
   if (adminOverriddenResults === null) {
-    await fetchLotteryResults(); // Ensure some data (even if empty from API) is there before adding
+    await fetchLotteryResults(); 
   }
   const newResult: DrawResult = { ...newResultData, id: crypto.randomUUID() };
   adminOverriddenResults = [...(adminOverriddenResults || []), newResult];
-  // Sort by date descending after adding
   adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return newResult;
 }
+
+export async function addMultipleDrawResults(newRawResults: Array<Omit<DrawResult, 'id'>>): Promise<DrawResult[]> {
+  if (adminOverriddenResults === null) {
+    await fetchLotteryResults(); // Ensure cache is initialized
+  }
+  const addedResults: DrawResult[] = [];
+  newRawResults.forEach(rawResult => {
+    const newResult: DrawResult = { ...rawResult, id: crypto.randomUUID() };
+    adminOverriddenResults = [...(adminOverriddenResults || []), newResult];
+    addedResults.push(newResult);
+  });
+  adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return addedResults;
+}
+
 
 export async function updateLotteryResult(updatedResult: DrawResult): Promise<DrawResult> {
   if (adminOverriddenResults === null) {
@@ -189,20 +201,20 @@ export async function updateLotteryResult(updatedResult: DrawResult): Promise<Dr
 
 export async function deleteLotteryResult(resultId: string): Promise<void> {
   if (adminOverriddenResults === null) {
-    return; // Or throw error
+    return; 
   }
   adminOverriddenResults = adminOverriddenResults.filter(r => r.id !== resultId);
 }
 
 export async function setAllLotteryResults(results: DrawResult[]): Promise<void> {
   adminOverriddenResults = results.map(r => ({...r, id: r.id || crypto.randomUUID() }));
-  isDataFetchedFromApi = true; // Assume imported data is comprehensive
+  isDataFetchedFromApi = true; 
   adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
 export async function getAllLotteryResultsForExport(): Promise<DrawResult[]> {
   if (adminOverriddenResults === null) {
-    await fetchLotteryResults(); // Ensure data is loaded if not already
+    await fetchLotteryResults(); 
   }
   return adminOverriddenResults ? [...adminOverriddenResults] : [];
 }
@@ -212,11 +224,11 @@ export async function getAllLotteryResultsForExport(): Promise<DrawResult[]> {
 export function analyzeFrequencies(draws: DrawResult[]): { [key: number]: number } {
   const allNumbers = draws.flatMap(draw => draw.gagnants);
   const frequency: { [key: number]: number } = {};
-  for (let i = 1; i <= 90; i++) {
+  for (let i = 1; i <= 90; i++) { // Initialize for all numbers 1-90
     frequency[i] = 0;
   }
   allNumbers.forEach(num => { 
-    if (num >=1 && num <= 90) {
+    if (num >=1 && num <= 90) { // Ensure number is within valid range
       frequency[num] = (frequency[num] || 0) + 1; 
     }
   });
@@ -226,15 +238,15 @@ export function analyzeFrequencies(draws: DrawResult[]): { [key: number]: number
 // Analyse des tirages successifs
 function analyzeSuccessivePairs(draws: DrawResult[]): Array<{ date1: string; date2: string; common_numbers: number[] }> {
   const pairs: Array<{ date1: string; date2: string; common_numbers: number[] }> = [];
+  // Sort by date, then by draw_name to ensure correct pairing for draws on the same day but different types
   const sortedDraws = [...draws].sort((a, b) => {
     const dateComparison = new Date(a.date).getTime() - new Date(b.date).getTime();
     if (dateComparison !== 0) return dateComparison;
-    // If dates are same, sort by draw_name to ensure consistent pairing for draws on same day
     return a.draw_name.localeCompare(b.draw_name);
   });
 
   for (let i = 0; i < sortedDraws.length - 1; i++) {
-    // Only compare if it's the exact same draw_name for successive analysis
+    // Only compare if it's the exact same draw_name for successive analysis relevant to that specific draw type
     if (sortedDraws[i].draw_name === sortedDraws[i+1].draw_name) { 
         const currentDraw = new Set(sortedDraws[i].gagnants);
         const nextDraw = new Set(sortedDraws[i + 1].gagnants);
@@ -254,7 +266,6 @@ function analyzeSuccessivePairs(draws: DrawResult[]): Array<{ date1: string; dat
 // Modélisation bayésienne avec apprentissage des erreurs
 function bayesianProbabilities(frequencies: { [key: number]: number }, pastPredictions: Prediction[]): { [key: number]: number } {
   const totalWinningNumbers = Object.values(frequencies).reduce((sum, count) => sum + count, 0);
-  // Ensure totalDraws is at least 1 if there are frequencies, otherwise 0. Avoid division by zero.
   const totalDraws = totalWinningNumbers > 0 ? Math.max(1, totalWinningNumbers / 5) : 0; 
   
   const probabilities: { [key: number]: number } = {};
@@ -263,22 +274,21 @@ function bayesianProbabilities(frequencies: { [key: number]: number }, pastPredi
 
   for (let num = 1; num <= N; num++) {
     const observedCount = frequencies[num] || 0;
-    let errorAdjustmentFactor = 0; 
+    let errorAdjustmentScore = 0; // Sum of adjustments
 
     pastPredictions.forEach(pred => {
       if (pred.actual) { 
-        if (pred.predicted.includes(num) && !pred.actual.includes(num)) errorAdjustmentFactor -= 0.05;
-        if (!pred.predicted.includes(num) && pred.actual.includes(num)) errorAdjustmentFactor += 0.05;
+        if (pred.predicted.includes(num) && !pred.actual.includes(num)) errorAdjustmentScore -= 0.05; // Penalty
+        if (!pred.predicted.includes(num) && pred.actual.includes(num)) errorAdjustmentScore += 0.05; // Bonus
       }
     });
     
-    // Apply error adjustment factor to the observed count, scaled by total draws.
-    // Ensure adjustedObservedCount is not negative.
-    const adjustedObservedCount = Math.max(0, observedCount + (errorAdjustmentFactor * totalDraws));
+    // The adjustment is a factor related to the prediction history, not directly scaling the count by totalDraws here.
+    // It's more like an adjustment to the probability itself or the "trust" in the observed frequency.
+    // Let's adjust the observedCount slightly.
+    const adjustedObservedCount = Math.max(0, observedCount + (observedCount * errorAdjustmentScore)); // Proportional adjustment
 
-    // Calculate Bayesian probability with Laplace smoothing
     probabilities[num] = (adjustedObservedCount + alpha) / (totalDraws + N * alpha);
-    // Ensure probability is not negative (though division by positive denominator should prevent this if adjustedObservedCount is >= 0)
     if(probabilities[num] < 0) probabilities[num] = 0; 
   }
   return probabilities;
@@ -288,20 +298,21 @@ function bayesianProbabilities(frequencies: { [key: number]: number }, pastPredi
 function generateCombination(probabilities: { [key: number]: number }): number[] {
   const numbers = Object.keys(probabilities).map(Number).filter(n => n >= 1 && n <=90);
   
-  const popularNumbers = [1, 2, 3, 4, 5, 7, 13, 15, 23, 27, 31];
+  const popularNumbers = [1, 2, 3, 4, 5, 7, 13, 15, 23, 27, 31]; // Example popular numbers
   const adjustedProbabilitiesMap: {[key: number]: number } = {};
   
   numbers.forEach(num => {
-      adjustedProbabilitiesMap[num] = popularNumbers.includes(num) ? (probabilities[num] || 0) * 0.8 : (probabilities[num] || 0);
+      // Reduce weight of popular numbers, ensure probability is not negative
+      adjustedProbabilitiesMap[num] = Math.max(0, popularNumbers.includes(num) ? (probabilities[num] || 0) * 0.8 : (probabilities[num] || 0));
   });
 
   let availableNumbers = Object.keys(adjustedProbabilitiesMap).map(Number);
-  let availableProbs = availableNumbers.map(num => Math.max(0, adjustedProbabilitiesMap[num] || 0));
+  let availableProbs = availableNumbers.map(num => Math.max(0, adjustedProbabilitiesMap[num] || 0)); // Ensure positive probabilities
 
   const combination: number[] = [];
   
   if (availableNumbers.length < 5) { 
-    console.warn("Not enough unique numbers with positive probability to generate a 5-number combination. Returning random set from available or all numbers.");
+    console.warn("Not enough unique numbers with positive probability for weighted selection. Filling randomly.");
     const randomSet = new Set<number>();
     let sourceForRandom = availableNumbers.length > 0 ? [...availableNumbers] : Array.from({length: 90}, (_, i) => i + 1);
     
@@ -312,16 +323,16 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
     return Array.from(randomSet).sort((a,b) => a-b);
   }
 
-
   for (let k=0; k<5; k++) {
     const currentTotalProbSum = availableProbs.reduce((sum, p) => sum + p, 0);
+    // If all remaining probabilities are zero (or negative, which they shouldn't be), fill randomly
     if (currentTotalProbSum <= 0) { 
         const remainingAvailableForFill = availableNumbers.filter(n => !combination.includes(n));
         while(combination.length < 5 && remainingAvailableForFill.length > 0) {
             const randIdx = Math.floor(Math.random() * remainingAvailableForFill.length);
             combination.push(remainingAvailableForFill.splice(randIdx, 1)[0]);
         }
-        break;
+        break; // Exit outer loop
     }
 
     const r = Math.random() * currentTotalProbSum;
@@ -336,23 +347,21 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
       }
     }
     
-    if (chosenIndex !== -1) {
+    // Handle case where chosenIndex might not be found if all probs are 0 or due to floating point issues.
+    // Or if somehow availableNumbers is empty but loop continues.
+    if (chosenIndex !== -1 && availableNumbers[chosenIndex] !== undefined) {
       combination.push(availableNumbers[chosenIndex]);
       availableNumbers.splice(chosenIndex, 1); 
       availableProbs.splice(chosenIndex, 1); 
     } else if (availableNumbers.length > 0) { 
-        let fallbackIndex = 0;
-        if (availableProbs.length > 0) {
-            const maxProb = Math.max(...availableProbs);
-            if (maxProb > 0) {
-                 fallbackIndex = availableProbs.indexOf(maxProb);
-            }
-        }
-        if (fallbackIndex >= availableNumbers.length) fallbackIndex = 0;
-
+        // Fallback: pick a random one from remaining available if weighted selection fails
+        let fallbackIndex = Math.floor(Math.random() * availableNumbers.length);
         combination.push(availableNumbers[fallbackIndex]);
         availableNumbers.splice(fallbackIndex, 1);
         if (availableProbs.length > fallbackIndex) availableProbs.splice(fallbackIndex, 1);
+    } else {
+      // Should not happen if initial check for availableNumbers.length < 5 is correct
+      break; 
     }
   }
   return combination.sort((a, b) => a - b);
@@ -361,7 +370,7 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
 // --- IndexedDB ---
 const DB_NAME = 'LotoAnalyseDB';
 const DB_VERSION = 1;
-const PREDICTIONS_STORE_NAME = 'predictions_v1'; // Store name with versioning
+const PREDICTIONS_STORE_NAME = 'predictions_v1'; 
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -374,7 +383,6 @@ function openDB(): Promise<IDBDatabase> {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(PREDICTIONS_STORE_NAME)) {
         const store = db.createObjectStore(PREDICTIONS_STORE_NAME, { keyPath: 'id', autoIncrement: true });
-        // Index to query predictions by draw_name and date if needed
         store.createIndex('drawNameDateIndex', ['draw_name', 'date'], { unique: false });
       }
     };
@@ -389,7 +397,7 @@ export async function savePrediction(prediction: Omit<Prediction, 'id'>): Promis
     return new Promise<number>((resolve, reject) => {
       const transaction = db.transaction([PREDICTIONS_STORE_NAME], 'readwrite');
       const store = transaction.objectStore(PREDICTIONS_STORE_NAME);
-      const addRequest = store.add(prediction);
+      const addRequest = store.add(prediction); // ID will be auto-generated
       addRequest.onsuccess = () => resolve(addRequest.result as number);
       addRequest.onerror = (event) => reject(new Error(`Failed to save prediction: ${(event.target as IDBRequest).error?.message}`));
       transaction.oncomplete = () => db.close();
@@ -400,8 +408,7 @@ export async function savePrediction(prediction: Omit<Prediction, 'id'>): Promis
     });
   } catch (error) {
     console.warn(`Could not save prediction (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}`);
-    // Depending on requirements, either re-throw or return a specific value indicating failure
-    throw error; // Or return -1 / Promise.reject(error), etc.
+    throw error; 
   }
 }
 
@@ -416,7 +423,6 @@ export async function getPastPredictions(drawName?: string): Promise<Prediction[
       request.onsuccess = () => {
         let results = (request.result || []) as Prediction[];
         if (drawName) {
-            // Ensure p.draw_name exists before filtering
             results = results.filter(p => p && p.draw_name === drawName);
         }
         resolve(results);
@@ -463,19 +469,17 @@ export async function updatePredictionActual(id: number, actual: number[]): Prom
     });
   } catch (error) {
      console.warn(`Could not update prediction (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}`);
-     // Depending on requirements, re-throw or handle gracefully
      throw error;
   }
 }
 
 // Fonction principale pour générer une prédiction - Exported
 export async function generatePrediction(drawName: string, month?: string): Promise<PredictionResultType> {
-  const draws = await fetchLotteryResults(month); // Use already fetched/admin-overridden data if available
+  const draws = await fetchLotteryResults(month); 
   const filteredDraws = draws.filter(draw => draw.draw_name === drawName);
   
   if (filteredDraws.length === 0) {
       console.warn(`No historical data found for draw '${drawName}' for the specified period/filters to generate prediction.`);
-      // Return a default structure for PredictionResultType
       return { 
           bayesianProbabilities: {},
           suggestedCombination: [],
@@ -495,5 +499,3 @@ export async function generatePrediction(drawName: string, month?: string): Prom
     successivePairs: successivePairs,
   };
 }
-
-    
