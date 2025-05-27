@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getDrawNameBySlug } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, BarChart3, Cpu, FileText, Network } from 'lucide-react';
+import { AlertTriangle, BarChart3, Cpu, FileText, Network, Lightbulb } from 'lucide-react'; // Added Lightbulb for Prédiction Intelligente
 
 // Dynamically import feature components
 import dynamic from 'next/dynamic';
@@ -71,7 +71,7 @@ export default function DrawCategoryPage() {
       <CardHeader className="px-0 pb-2">
         <CardTitle className="text-3xl font-bold text-primary">{drawName}</CardTitle>
         <CardDescription>
-          Explore data, statistics, and predictions for the {drawName} lottery draw.
+          Explorez les données, statistiques et prédictions intelligentes pour le tirage {drawName}.
         </CardDescription>
       </CardHeader>
 
@@ -80,7 +80,7 @@ export default function DrawCategoryPage() {
           <TabsTrigger value="donnees"><FileText className="w-4 h-4 mr-2" />Données</TabsTrigger>
           <TabsTrigger value="consulter"><Network className="w-4 h-4 mr-2" />Consulter</TabsTrigger>
           <TabsTrigger value="statistiques"><BarChart3 className="w-4 h-4 mr-2" />Statistiques</TabsTrigger>
-          <TabsTrigger value="prediction"><Cpu className="w-4 h-4 mr-2" />Prédiction</TabsTrigger>
+          <TabsTrigger value="prediction-intelligente"><Lightbulb className="w-4 h-4 mr-2" />Prédiction Intelligente</TabsTrigger>
         </TabsList>
 
         <TabsContent value="donnees">
@@ -92,7 +92,7 @@ export default function DrawCategoryPage() {
         <TabsContent value="statistiques">
           <StatisticalAnalysis specificDrawName={drawName} />
         </TabsContent>
-        <TabsContent value="prediction">
+        <TabsContent value="prediction-intelligente">
           <PredictionEngine drawName={drawName} />
         </TabsContent>
       </Tabs>

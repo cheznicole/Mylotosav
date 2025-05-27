@@ -28,7 +28,7 @@ const GenerateLottoPredictionsOutputSchema = z.object({
   confidenceScores: z
     .array(z.number())
     .describe('The confidence scores for each predicted number.'),
-  analysis: z.string().describe('An analysis of why these numbers were predicted.'),
+  analysis: z.string().describe('An analysis of why these numbers were predicted, including contextual insights about number trends or frequencies if discernible from the past results.'),
 });
 export type GenerateLottoPredictionsOutput = z.infer<
   typeof GenerateLottoPredictionsOutputSchema
@@ -44,15 +44,18 @@ const generateLottoPredictionsPrompt = ai.definePrompt({
   name: 'generateLottoPredictionsPrompt',
   input: {schema: GenerateLottoPredictionsInputSchema},
   output: {schema: GenerateLottoPredictionsOutputSchema},
-  prompt: `You are an AI lottery prediction expert.
+  prompt: `You are an AI lottery prediction expert specializing in Loto Bonheur.
 
-  Based on the past lottery results provided, predict the numbers for the next Loto Bonheur draw. Also provide a simple Bayesian analysis for a confidence score / probability for each predicted number.
+  Based on the past lottery results provided, predict 5 unique numbers for the next Loto Bonheur draw. Also provide a confidence score (between 0 and 1) for each predicted number.
 
   Past Results: {{{pastResults}}}
 
-  Ensure predictions adhere to Loto Bonheur rules.
-  Return an analysis of why these numbers were predicted.
+  Your analysis should be insightful and written in natural language, as if explaining your reasoning to a user. For example, if a number is predicted, you might mention if it has been under-represented or over-represented recently, or if it frequently appears with other predicted numbers, based on the provided historical data. Aim for a detailed explanation for your choices.
+
+  Ensure predictions adhere to Loto Bonheur rules (numbers between 1 and 90).
+  Return the predicted numbers, their confidence scores, and your detailed analysis.
   The output field for predicted numbers should be 'predictedNumbers'.
+  The output field for the analysis should be 'analysis'.
   Predictions:`,
 });
 
@@ -64,6 +67,13 @@ const generateLottoPredictionsFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await generateLottoPredictionsPrompt(input);
+    // Ensure 5 numbers are predicted, if not, log and potentially adjust.
+    // For now, we trust the LLM based on the prompt.
+    if (output && output.predictedNumbers && output.predictedNumbers.length !== 5) {
+      console.warn(`AI returned ${output.predictedNumbers.length} numbers, expected 5. Output:`, output);
+      // Potentially add logic here to pad/truncate or re-query if critical
+    }
     return output!;
   }
 );
+
