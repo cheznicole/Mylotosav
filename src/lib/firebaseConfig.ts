@@ -2,17 +2,20 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { getAnalytics, type Analytics } from "firebase/analytics";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyC6wHrttUcY9DgiNt3ZXMBUBJZpLIeVmMA",
-  authDomain: "lottery-analyzer-klvae.firebaseapp.com",
-  projectId: "lottery-analyzer-klvae",
-  storageBucket: "lottery-analyzer-klvae.appspot.com", // Standard format
-  messagingSenderId: "711716823831",
-  appId: "1:711716823831:web:3ba6b92f4193a0b2834d52"
+  apiKey: "AIzaSyAUH5fl6mBwPDyPdBe9G7acWikDGstSt8U",
+  authDomain: "sonic-terrain-454712-t6.firebaseapp.com",
+  projectId: "sonic-terrain-454712-t6",
+  storageBucket: "sonic-terrain-454712-t6.firebasestorage.app",
+  messagingSenderId: "1052251970054",
+  appId: "1:1052251970054:web:7246abec77e6d4e9da4187",
+  measurementId: "G-HJ1YC55VC5"
 };
 
 // Initialize Firebase
@@ -25,4 +28,9 @@ if (!getApps().length) {
 
 const db: Firestore = getFirestore(app);
 
-export { app, db };
+let analytics: Analytics | undefined;
+if (typeof window !== 'undefined') {
+  analytics = getAnalytics(app);
+}
+
+export { app, db, analytics };
