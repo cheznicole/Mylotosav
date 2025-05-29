@@ -14,56 +14,63 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(true); // Initial loading state
   const { toast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        try {
-          const idTokenResult = await user.getIdTokenResult();
-          setIsAdmin(!!idTokenResult.claims.admin);
-        } catch (error) {
-          console.error("Error fetching ID token result:", error);
+      try {
+        setCurrentUser(user);
+        if (user) {
+          try {
+            const idTokenResult = await user.getIdTokenResult(); // Don't force refresh by default
+            setIsAdmin(!!idTokenResult.claims.admin);
+          } catch (error) {
+            console.error("Error fetching ID token result:", error);
+            setIsAdmin(false); // Ensure isAdmin is false if token check fails
+            toast({ variant: "destructive", title: "Auth Error", description: "Failed to verify admin status." });
+          }
+        } else {
           setIsAdmin(false);
-          toast({ variant: "destructive", title: "Auth Error", description: "Failed to verify admin status." });
         }
-      } else {
+      } catch (e) {
+        // Catch any unexpected errors during the onAuthStateChanged user processing
+        console.error("Critical error in onAuthStateChanged user processing:", e);
         setIsAdmin(false);
+        setCurrentUser(null);
+      } finally {
+        // This ensures setLoading(false) is called regardless of success/failure above
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
   }, [toast]);
 
   const login = async (email: string, pass: string) => {
-    setLoading(true);
+    setLoading(true); // Signal that a login operation has started
     try {
       await signInWithEmailAndPassword(auth, email, pass);
-      // onAuthStateChanged will handle setting user and admin status
+      // onAuthStateChanged will handle setting user, admin status, and then setLoading(false)
     } catch (error: any) {
       console.error("Login error:", error);
       toast({ variant: "destructive", title: "Login Failed", description: error.message || "Invalid credentials." });
-      setIsAdmin(false); // Ensure admin status is reset on login failure
-      setCurrentUser(null); // Ensure user is null on login failure
-      setLoading(false); // Explicitly set loading to false on error
-      throw error; // Re-throw to allow login page to handle redirect logic if needed
+      setIsAdmin(false); // Reset states on login failure
+      setCurrentUser(null);
+      setLoading(false); // Explicitly set loading to false on login error
+      throw error; // Re-throw to allow login page to handle UI updates
     }
-    // setLoading(false) will be handled by onAuthStateChanged's effect
   };
 
   const logout = async () => {
-    setLoading(true);
+    setLoading(true); // Signal that a logout operation has started
     try {
       await firebaseSignOut(auth);
-      // onAuthStateChanged will handle resetting user and admin status
+      // onAuthStateChanged will handle resetting user, admin status, and then setLoading(false)
     } catch (error) {
       console.error("Logout error:", error);
       toast({ variant: "destructive", title: "Logout Failed", description: "Could not log out." });
-    } finally {
-      // Ensure admin status is reset and loading is false even if onAuthStateChanged is slow
+      // Ensure states are reset and loading is false even if onAuthStateChanged is slow or errors
       setIsAdmin(false); 
       setCurrentUser(null);
       setLoading(false);
