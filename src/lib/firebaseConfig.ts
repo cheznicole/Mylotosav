@@ -10,7 +10,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyC6wHrttUcY9DgiNt3ZXMBUBJZpLIeVmMA",
   authDomain: "lottery-analyzer-klvae.firebaseapp.com",
   projectId: "lottery-analyzer-klvae",
-  storageBucket: "lottery-analyzer-klvae.appspot.com", // Corrected format
+  storageBucket: "lottery-analyzer-klvae.appspot.com", // Standard format
   messagingSenderId: "711716823831",
   appId: "1:711716823831:web:3ba6b92f4193a0b2834d52"
 };
