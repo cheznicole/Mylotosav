@@ -34,6 +34,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-64 w-full" />
         </div>
+        <p className="text-sm text-muted-foreground mt-4">Si cela prend du temps, veuillez vérifier votre connexion internet et vous assurer que les revendications d'administrateur (custom claims) sont correctement configurées dans Firebase.</p>
       </div>
     );
   }

@@ -23,12 +23,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setCurrentUser(user);
         if (user) {
           try {
-            const idTokenResult = await user.getIdTokenResult(); // Don't force refresh by default
+            // Attempt to get fresh token result to check claims
+            const idTokenResult = await user.getIdTokenResult(true); // Force refresh
             setIsAdmin(!!idTokenResult.claims.admin);
           } catch (error) {
             console.error("Error fetching ID token result:", error);
             setIsAdmin(false); // Ensure isAdmin is false if token check fails
-            toast({ variant: "destructive", title: "Auth Error", description: "Failed to verify admin status." });
+            toast({ variant: "destructive", title: "Auth Error", description: "Failed to verify admin status. Please ensure custom claims are set correctly." });
           }
         } else {
           setIsAdmin(false);
@@ -45,7 +46,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     });
 
     return () => unsubscribe();
-  }, [toast]);
+  }, [toast]); // toast dependency is generally stable
 
   const login = async (email: string, pass: string) => {
     setLoading(true); // Signal that a login operation has started
@@ -54,7 +55,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // onAuthStateChanged will handle setting user, admin status, and then setLoading(false)
     } catch (error: any) {
       console.error("Login error:", error);
-      toast({ variant: "destructive", title: "Login Failed", description: error.message || "Invalid credentials." });
+      toast({ variant: "destructive", title: "Login Failed", description: error.message || "Invalid credentials or user not found." });
       setIsAdmin(false); // Reset states on login failure
       setCurrentUser(null);
       setLoading(false); // Explicitly set loading to false on login error
