@@ -14,65 +14,112 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true); // Initial loading state
+  const [loading, setLoading] = useState<boolean>(true);
   const { toast } = useToast();
 
   useEffect(() => {
+    console.log('[AuthProvider] useEffect triggered');
+    let isActive = true; // Flag to prevent state updates if component unmounts
+    let loadingTimeout: NodeJS.Timeout;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('[AuthProvider] onAuthStateChanged callback triggered. User:', user ? user.uid : null);
+      // Clear previous timeout if auth state changes quickly
+      if (loadingTimeout) clearTimeout(loadingTimeout);
+
       try {
-        setCurrentUser(user);
         if (user) {
+          setCurrentUser(user);
+          console.log('[AuthProvider] User detected. Fetching ID token result...');
           try {
-            // Attempt to get fresh token result to check claims
             const idTokenResult = await user.getIdTokenResult(true); // Force refresh
-            setIsAdmin(!!idTokenResult.claims.admin);
-          } catch (error) {
-            console.error("Error fetching ID token result:", error);
-            toast({ variant: "destructive", title: "Auth Error", description: "Failed to verify admin status. Ensure custom claims are set and network is stable." });
-            setIsAdmin(false); // Ensure isAdmin is false if token check fails
+            console.log('[AuthProvider] ID token result fetched. Claims:', idTokenResult.claims);
+            if (isActive) {
+              setIsAdmin(!!idTokenResult.claims.admin);
+              console.log('[AuthProvider] isAdmin set to:', !!idTokenResult.claims.admin);
+            }
+          } catch (tokenError) {
+            console.error("[AuthProvider] Error fetching ID token result:", tokenError);
+            toast({ variant: "destructive", title: "Auth Error", description: "Failed to verify admin status. Please check network or re-login." });
+            if (isActive) {
+              setIsAdmin(false);
+            }
           }
         } else {
-          setIsAdmin(false);
+          if (isActive) {
+            setCurrentUser(null);
+            setIsAdmin(false);
+            console.log('[AuthProvider] No user detected. isAdmin set to false.');
+          }
         }
       } catch (e) {
-        // Catch any unexpected errors during the onAuthStateChanged user processing
-        console.error("Critical error in onAuthStateChanged user processing:", e);
-        setIsAdmin(false);
-        setCurrentUser(null);
+        console.error("[AuthProvider] Critical error in onAuthStateChanged user processing:", e);
+        if (isActive) {
+          setIsAdmin(false);
+          setCurrentUser(null);
+        }
       } finally {
-        // This ensures setLoading(false) is called regardless of success/failure above
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+          console.log('[AuthProvider] Loading state set to false.');
+        }
       }
     });
 
-    return () => unsubscribe();
-  }, [toast]); // toast dependency is generally stable
+    // Fallback timeout to prevent indefinite loading if onAuthStateChanged doesn't resolve quickly
+    loadingTimeout = setTimeout(() => {
+      if (isActive && loading) {
+        console.warn('[AuthProvider] Auth state resolution timed out. Forcing loading to false.');
+        setLoading(false);
+        // Potentially set user to null and isAdmin to false if still loading
+        // This indicates a deeper problem with Firebase init or connection
+        if (!currentUser) {
+          setCurrentUser(null);
+          setIsAdmin(false);
+        }
+      }
+    }, 20000); // 20 seconds timeout
+
+    return () => {
+      isActive = false;
+      unsubscribe();
+      if (loadingTimeout) clearTimeout(loadingTimeout);
+      console.log('[AuthProvider] Unsubscribed from onAuthStateChanged.');
+    };
+  }, [toast]); // Added toast
 
   const login = async (email: string, pass: string) => {
-    setLoading(true); // Signal that a login operation has started
+    console.log('[AuthProvider] login called for email:', email);
+    setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, pass);
+      console.log('[AuthProvider] signInWithEmailAndPassword successful. onAuthStateChanged will handle the rest.');
       // onAuthStateChanged will handle setting user, admin status, and then setLoading(false)
     } catch (error: any) {
-      console.error("Login error:", error);
+      console.error("[AuthProvider] Login error:", error);
       toast({ variant: "destructive", title: "Login Failed", description: error.message || "Invalid credentials or user not found." });
-      setIsAdmin(false); // Reset states on login failure
+      if (error.code === 'auth/invalid-credential') {
+         // Specific message for invalid credentials
+         toast({ variant: "destructive", title: "Identifiants Invalides", description: "L'email ou le mot de passe est incorrect. Veuillez réessayer."});
+      }
+      setIsAdmin(false);
       setCurrentUser(null);
       setLoading(false); // Explicitly set loading to false on login error
-      throw error; // Re-throw to allow login page to handle UI updates
+      throw error;
     }
   };
 
   const logout = async () => {
-    setLoading(true); // Signal that a logout operation has started
+    console.log('[AuthProvider] logout called.');
+    setLoading(true);
     try {
       await firebaseSignOut(auth);
+      console.log('[AuthProvider] firebaseSignOut successful. onAuthStateChanged will handle reset.');
       // onAuthStateChanged will handle resetting user, admin status, and then setLoading(false)
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error("[AuthProvider] Logout error:", error);
       toast({ variant: "destructive", title: "Logout Failed", description: "Could not log out." });
-      // Ensure states are reset and loading is false even if onAuthStateChanged is slow or errors
-      setIsAdmin(false); 
+      setIsAdmin(false);
       setCurrentUser(null);
       setLoading(false);
     }

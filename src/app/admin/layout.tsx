@@ -5,15 +5,15 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Loader2 } from 'lucide-react'; // Added Loader2
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Added Alert components
+import { AlertTriangle, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface AdminLayoutProps {
   children: ReactNode;
 }
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const { currentUser, isAdmin, loading, logout } = useAuth(); // Added logout
+  const { currentUser, isAdmin, loading, logout } = useAuth();
   const router = useRouter();
   const [localRedirecting, setLocalRedirecting] = useState(false);
   const [showSlowLoadingMessage, setShowSlowLoadingMessage] = useState(false);
@@ -44,15 +44,20 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     }
 
     if (!currentUser) {
+      console.log('[AdminLayout] No current user. Redirecting to login (unauthenticated).');
       setLocalRedirecting(true);
       router.replace('/login?message=unauthenticated');
     } else if (!isAdmin) {
+      console.log('[AdminLayout] User is not admin. Logging out and redirecting to login (unauthorized).');
       setLocalRedirecting(true);
       // If user is authenticated but not admin, log them out and redirect
       // This prevents them from being stuck in a loop if they are logged in as non-admin
       logout().finally(() => {
          router.replace('/login?message=unauthorized');
       });
+    } else {
+      // User is authenticated and is an admin.
+      console.log('[AdminLayout] User is authenticated admin. Access granted.');
     }
 
   }, [currentUser, isAdmin, loading, router, localRedirecting, logout]);
@@ -77,7 +82,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                         <li>Que les revendications d'administrateur (custom claims `admin:true`) sont correctement configurées dans Firebase Authentication pour votre compte.</li>
                         <li>La console de votre navigateur (F12) pour des erreurs spécifiques de Firebase ou de réseau.</li>
                     </ul>
-                    Si le problème persiste, contactez le support technique.
+                    Si le problème persiste, contactez le support technique ou vérifiez l'état des services Firebase.
                 </AlertDescription>
             </Alert>
         )}
@@ -86,19 +91,21 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   if (!currentUser || !isAdmin) {
+    // This state should ideally be brief as the useEffect above handles redirection
     return (
          <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-6" />
             <p className="text-xl text-muted-foreground">
-              {localRedirecting ? "Redirection en cours..." : "Accès non autorisé. Préparation de la redirection..."}
+              {localRedirecting ? "Redirection en cours..." : "Accès non autorisé ou session expirée. Préparation de la redirection..."}
             </p>
              <p className="text-sm text-muted-foreground mt-2">
-                Vous serez redirigé vers la page de connexion.
+                Vous allez être redirigé vers la page de connexion.
              </p>
             <Skeleton className="h-10 w-3/4 md:w-1/2 mt-6" />
         </div>
     );
   }
 
+  // If loading is false, and currentUser and isAdmin are true
   return <>{children}</>;
 }
