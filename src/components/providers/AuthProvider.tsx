@@ -28,8 +28,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setIsAdmin(!!idTokenResult.claims.admin);
           } catch (error) {
             console.error("Error fetching ID token result:", error);
+            toast({ variant: "destructive", title: "Auth Error", description: "Failed to verify admin status. Ensure custom claims are set and network is stable." });
             setIsAdmin(false); // Ensure isAdmin is false if token check fails
-            toast({ variant: "destructive", title: "Auth Error", description: "Failed to verify admin status. Please ensure custom claims are set correctly." });
           }
         } else {
           setIsAdmin(false);

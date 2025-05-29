@@ -16,6 +16,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [localRedirecting, setLocalRedirecting] = useState(false);
 
   useEffect(() => {
+    if (!loading) {
+      // Log current auth state once loading is complete, for debugging
+      console.log('[AdminLayout] Auth State Resolved:', {
+        currentUser: !!currentUser,
+        isAdmin,
+        localRedirecting,
+      });
+    }
+
     // If auth state is still loading, or if we've already initiated a redirect, do nothing.
     if (loading || localRedirecting) {
       return;
@@ -47,7 +56,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <p className="text-sm text-muted-foreground mt-4">
             Si cela prend beaucoup de temps, veuillez vérifier votre connexion internet et vous assurer
             que les revendications d'administrateur (custom claims) sont correctement configurées dans Firebase.
-            Vérifiez également la console de votre navigateur pour des erreurs.
+            Vérifiez également la console de votre navigateur pour des erreurs spécifiques.
         </p>
       </div>
     );
