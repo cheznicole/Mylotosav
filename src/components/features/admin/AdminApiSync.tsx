@@ -33,16 +33,21 @@ export function AdminApiSync() {
       let summaryMessage = `API Sync Complete: Fetched ${scrapedResults.length} results. `;
       summaryMessage += `Added ${added.length} new results to Firestore. `;
       summaryMessage += `Skipped ${duplicates} duplicates. `;
+      
       if (firestoreErrors.length > 0) {
-        summaryMessage += `${firestoreErrors.length} Firestore save errors occurred.`;
-        setSyncError(`Firestore save errors: ${firestoreErrors.join("; ")}`);
+        const firestoreErrorDetails = firestoreErrors.join("; ");
+        const permissionHint = firestoreErrors.some(err => err.toLowerCase().includes("permission"))
+          ? " This may be due to Firestore security rules. Please ensure the admin user has write permissions."
+          : "";
+        summaryMessage += `${firestoreErrors.length} Firestore save errors occurred. ${permissionHint}`;
+        setSyncError(`Firestore save errors: ${firestoreErrorDetails}.${permissionHint}`);
          toast({
             variant: "destructive",
             title: "API Sync - Partial Success with Errors",
             description: summaryMessage + " Check console for details.",
             duration: 10000,
         });
-      } else if (added.length === 0 && duplicates > 0) {
+      } else if (added.length === 0 && duplicates > 0 && scrapedResults.length > 0) {
          toast({
             title: "API Sync - No New Data",
             description: summaryMessage + " All fetched results were already in Firestore or duplicates.",
@@ -55,10 +60,16 @@ export function AdminApiSync() {
             className: "bg-green-600 text-white",
             duration: 9000,
         });
+      } else if (scrapedResults.length > 0 && added.length === 0 && duplicates === 0 && firestoreErrors.length === 0) {
+        toast({
+          title: "API Sync - No Changes",
+          description: "All fetched results were invalid or resulted in no changes to the database.",
+          duration: 7000,
+        });
       } else {
          toast({
-            title: "API Sync - No Changes",
-            description: summaryMessage,
+            title: "API Sync - Processed",
+            description: summaryMessage, // Catch-all for cases like 0 fetched, 0 added, 0 duplicates
             duration: 7000
          });
       }
@@ -66,8 +77,11 @@ export function AdminApiSync() {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during API sync.";
-      setSyncError(errorMessage);
-      toast({ variant: "destructive", title: "API Sync Error", description: errorMessage, duration: 9000 });
+      const permissionHint = errorMessage.toLowerCase().includes("permission")
+        ? " This may be due to Firestore security rules. Please ensure the admin user has write permissions."
+        : "";
+      setSyncError(`${errorMessage}${permissionHint}`);
+      toast({ variant: "destructive", title: "API Sync Error", description: `${errorMessage}${permissionHint}`, duration: 9000 });
       console.error("API Sync error:", error);
     } finally {
       setIsSyncing(false);
