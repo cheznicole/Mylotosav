@@ -17,37 +17,32 @@ import { fr } from "date-fns/locale";
 
 // Helper to parse French month names
 const frenchMonthToNumber: { [key: string]: string } = {
-  'janvier': '01', 'fevrier': '02', 'mars': '03', 'avril': '04', 'mai': '05', 'juin': '06', // fevrier without accent for normalization
-  'juillet': '07', 'aout': '08', 'septembre': '09', 'octobre': '10', 'novembre': '11', 'decembre': '12' // aout and decembre without accent
+  'janvier': '01', 'fevrier': '02', 'mars': '03', 'avril': '04', 'mai': '05', 'juin': '06',
+  'juillet': '07', 'aout': '08', 'septembre': '09', 'octobre': '10', 'novembre': '11', 'decembre': '12'
 };
 
 function parseFrenchDate(dateStr: string): string | null {
-  // Normalize to lowercase and remove accents for robust matching
   const normalizedDateStr = dateStr.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   
-  // Try direct parsing with locale first (e.g., "19 mai 2025")
   let parsed = parseDate(dateStr, 'dd MMMM yyyy', new Date(), { locale: fr });
   if (isValid(parsed)) {
     return format(parsed, 'yyyy-MM-dd');
   }
   
-  // Regex to find day, month (text), year from normalized string
   const datePartsRegex = /(\d{1,2})\s*([a-z]+)\s*(\d{4})/;
   const match = normalizedDateStr.match(datePartsRegex);
 
   if (match) {
     const day = match[1].padStart(2, '0');
-    const monthName = match[2]; // Already normalized
+    const monthName = match[2]; 
     const year = match[3];
     
-    // Find month number by matching normalized month name
-    const monthNumber = frenchMonthToNumber[monthName as keyof typeof frenchMonthToNumber] || 
-                        Object.entries(frenchMonthToNumber).find(([,val]) => monthName.startsWith(val.substring(0,3)))?.[0];
+    const monthNumberKey = Object.keys(frenchMonthToNumber).find(key => 
+        key === monthName || monthName.startsWith(key.substring(0,3))
+    );
 
-
-    if (day && monthNumber && year) {
-      // Ensure monthNumber from the matched key (e.g. 'janvier' maps to '01')
-      const numericMonth = frenchMonthToNumber[monthNumber as keyof typeof frenchMonthToNumber];
+    if (day && monthNumberKey && year) {
+      const numericMonth = frenchMonthToNumber[monthNumberKey];
       if (numericMonth) {
         parsed = parseDate(`${year}-${numericMonth}-${day}`, 'yyyy-MM-dd', new Date());
         if (isValid(parsed)) {
@@ -155,6 +150,11 @@ export function AdminImageImport() {
         const summary = `Draw: ${aiResult.drawName}. AI Extracted: ${aiResult.results.length}. Processable: ${resultsToProcess.length}. Added to DB: ${addedCount}. Duplicates Skipped: ${duplicateCount}. Invalid Dates: ${parsingErrorsCount}. Invalid Winning #: ${invalidWinningNumbersCount}. DB Errors: ${firestoreErrorMessages.length}.`;
         setProcessingSummary(summary);
 
+        const firestoreErrorDetails = firestoreErrorMessages.join('; ');
+        const permissionHint = firestoreErrorMessages.some(err => err.toLowerCase().includes("permission")) 
+          ? " This may be due to Firestore security rules. Please ensure the admin user has write permissions." 
+          : "";
+
         if (addedCount > 0 && firestoreErrorMessages.length === 0) {
             toast({
                 title: "Import Successful",
@@ -163,13 +163,14 @@ export function AdminImageImport() {
                 duration: 9000,
             });
         } else if (firestoreErrorMessages.length > 0) {
+             const toastDescription = `Some results for "${aiResult.drawName}" could not be saved. ${addedCount} added. ${firestoreErrorMessages.length} DB errors. Details: ${firestoreErrorDetails}.${permissionHint} Full summary: ${summary}`;
              toast({
                 variant: "destructive",
                 title: "Import Partially Failed",
-                description: `Some results for "${aiResult.drawName}" could not be saved to Firestore. ${addedCount} added. ${firestoreErrorMessages.length} DB errors. Details: ${firestoreErrorMessages.join('; ')}. Full summary: ${summary}`,
-                duration: 12000,
+                description: toastDescription,
+                duration: 15000,
             });
-            setImportError(`Firestore errors occurred. ${firestoreErrorMessages.join('; ')}`);
+            setImportError(`Firestore errors occurred. ${firestoreErrorDetails}.${permissionHint}`);
         } else if (resultsToProcess.length > 0) { 
              toast({
                 title: "Import Processed - No New Data",
@@ -209,8 +210,11 @@ export function AdminImageImport() {
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during image import.";
-      setImportError(errorMessage);
-      toast({ variant: "destructive", title: "Critical Import Error", description: errorMessage, duration: 7000 });
+      const permissionHint = errorMessage.toLowerCase().includes("permission")
+        ? " This may be due to Firestore security rules. Please ensure the admin user has write permissions."
+        : "";
+      setImportError(`${errorMessage}${permissionHint}`);
+      toast({ variant: "destructive", title: "Critical Import Error", description: `${errorMessage}${permissionHint}`, duration: 9000 });
       console.error("Image import error:", err);
     } finally {
       setIsImporting(false);
@@ -263,7 +267,7 @@ export function AdminImageImport() {
              <div className={`p-4 border rounded-md flex items-start ${
                 importError 
                     ? "bg-destructive/10 text-destructive border-destructive/30" 
-                    : (processingSummary.includes("Added to DB: 0") && !processingSummary.includes("DB Errors: 0") && !processingSummary.includes("AI Extracted: 0")) // No DB adds, but not because of DB errors or no AI data
+                    : (processingSummary.includes("Added to DB: 0") && !processingSummary.includes("DB Errors: 0") && !processingSummary.includes("AI Extracted: 0")) 
                         ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/30" 
                         : "bg-green-600/10 text-green-700 dark:text-green-300 border-green-600/30"
                 }`}>
