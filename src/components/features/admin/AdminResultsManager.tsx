@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm, type SubmitHandler } from "react-hook-form";
+import { useForm, type SubmitHandler, Controller } from "react-hook-form"; // Combined Controller import
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
@@ -105,10 +105,11 @@ export function AdminResultsManager() {
   const loadResults = async () => {
     setIsLoading(true);
     try {
-      const data = await fetchLotteryResults(); // Fetches all (potentially admin overridden)
+      const data = await fetchLotteryResults();
       setResults(data);
     } catch (error) {
       toast({ variant: "destructive", title: "Error loading results", description: (error as Error).message });
+      console.error("Error loading results:", error);
     } finally {
       setIsLoading(false);
     }
@@ -123,7 +124,7 @@ export function AdminResultsManager() {
     if (result) {
       setEditingResult(result);
       form.setValue("draw_name", result.draw_name);
-      form.setValue("date", parseISO(result.date)); // Parse string date to Date object
+      form.setValue("date", parseISO(result.date)); 
       form.setValue("gagnants", result.gagnants.join(", "));
       form.setValue("machine", result.machine?.join(", ") || "");
     } else {
@@ -150,9 +151,10 @@ export function AdminResultsManager() {
         toast({ title: "Success", description: "Result added successfully." });
       }
       setIsDialogOpen(false);
-      loadResults(); // Refresh list
+      loadResults(); 
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: (error as Error).message });
+      console.error("Error submitting result:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -162,16 +164,18 @@ export function AdminResultsManager() {
     try {
       await deleteLotteryResult(resultId);
       toast({ title: "Success", description: "Result deleted successfully." });
-      loadResults(); // Refresh list
+      loadResults(); 
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: (error as Error).message });
+      console.error("Error deleting result:", error);
     }
   };
   
   const filteredResults = results.filter(result => 
     result.draw_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     result.date.includes(searchTerm) ||
-    result.gagnants.join(',').includes(searchTerm)
+    result.gagnants.join(',').includes(searchTerm) ||
+    (result.machine && result.machine.join(',').includes(searchTerm))
   );
 
   return (
@@ -240,7 +244,7 @@ export function AdminResultsManager() {
             </TableRow>
           )) : (
              <TableRow>
-                <TableCell colSpan={5} className="text-center">No results found.</TableCell>
+                <TableCell colSpan={5} className="text-center">No results found. Ensure data is in Firestore under 'lotteryResults' collection and rules allow reads.</TableCell>
              </TableRow>
           )}
         </TableBody>
@@ -312,5 +316,3 @@ export function AdminResultsManager() {
     </div>
   );
 }
-// Need to import Controller from react-hook-form
-import { Controller } from "react-hook-form";
