@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react'; // Added useEffect
+import { useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,28 @@ export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const message = searchParams.get('message');
+    if (message === 'unauthenticated') {
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Required',
+        description: 'You must be logged in to access the admin panel.',
+        duration: 7000,
+      });
+    } else if (message === 'unauthorized') {
+      toast({
+        variant: 'destructive',
+        title: 'Access Denied',
+        description: 'You do not have administrative privileges to access the admin panel.',
+        duration: 7000,
+      });
+    }
+    // It's generally okay to leave the query param in the URL for transparency,
+    // or you could router.replace('/login') to clear it, but that might cause a flicker.
+  }, [searchParams, toast]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -30,7 +52,7 @@ export default function LoginPage() {
       // Error toast is handled by AuthProvider's login function
       setIsLoading(false);
     }
-    // setIsLoading(false) is handled by success or specific catch block
+    // setIsLoading(false) is handled by success (navigation away) or specific catch block
   };
 
   return (
