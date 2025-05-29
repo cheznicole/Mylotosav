@@ -1,26 +1,23 @@
 
-import axios, { type AxiosResponse } from 'axios';
-import { parse, getYear, isValid, format } from 'date-fns';
-import type { PredictionResult as PredictionResultType } from '@/types'; // Import shared type
+import {
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  where,
+  orderBy,
+  writeBatch,
+  type Timestamp,
+} from 'firebase/firestore';
+import { db } from '@/lib/firebaseConfig'; // Ensure db is correctly imported
+import type { PredictionResult as PredictionResultType, DrawResult as IDrawResult, Prediction as IPrediction } from '@/types';
+import { getYear, parse, isValid, format } from 'date-fns';
 
-// Interfaces
-export interface DrawResult {
-  id: string; // Unique ID for each draw result
-  draw_name: string;
-  date: string; // YYYY-MM-DD format
-  gagnants: number[]; // Must be 5 numbers (1-90)
-  machine?: number[]; // 0-5 numbers (1-90)
-}
 
-export interface Prediction {
-  id?: number; // Optional: for IndexedDB autoIncrement
-  draw_name: string;
-  date: string;
-  predicted: number[];
-  actual?: number[];
-}
-
-// Calendrier des tirages - Exported for use in sidebar and filters
+// Re-export DRAW_SCHEDULE if it's defined here, or ensure it's imported if defined elsewhere
 export const DRAW_SCHEDULE: { [day: string]: { [time: string]: string } }  = {
   Lundi: { '10H': 'Reveil', '13H': 'Etoile', '16H': 'Akwaba', '18H15': 'Monday Special' },
   Mardi: { '10H': 'La Matinale', '13H': 'Emergence', '16H': 'Sika', '18H15': 'Lucky Tuesday' },
@@ -31,138 +28,17 @@ export const DRAW_SCHEDULE: { [day: string]: { [time: string]: string } }  = {
   Dimanche: { '10H': 'Benediction', '13H': 'Prestige', '16H': 'Awale', '18H15': 'Espoir' },
 };
 
-let adminOverriddenResults: DrawResult[] | null = null;
-let isDataFetchedFromApi = false;
 
-// Récupération des résultats de l'API - Exported
-export async function fetchLotteryResults(month?: string): Promise<DrawResult[]> {
-  if (adminOverriddenResults !== null && !month) { 
-    return [...adminOverriddenResults].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }
-  
-  if (adminOverriddenResults !== null && isDataFetchedFromApi && month){
-     const [year, monthValue] = month.split('-').map(Number);
-     return adminOverriddenResults.filter(r => {
-        const rDate = new Date(r.date);
-        return rDate.getFullYear() === year && rDate.getMonth() + 1 === monthValue;
-     }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }
+// Use the IDrawResult for Firestore operations. Ensure it has an 'id' field.
+export type DrawResult = IDrawResult;
+export type Prediction = IPrediction;
 
-  const baseUrl = 'https://lotobonheur.ci/api/results';
-  const url = month ? `${baseUrl}?month=${month}` : baseUrl;
-
-  try {
-    const response: AxiosResponse = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        Accept: 'application/json',
-        Referer: 'https://lotobonheur.ci/resultats',
-      },
-      timeout: 15000,
-    });
-
-    const resultsData = response.data;
-    if (!resultsData.success) {
-      console.error('API response not successful:', resultsData);
-      throw new Error('Réponse API non réussie');
-    }
-    
-    const drawsResultsWeekly = resultsData.drawsResultsWeekly;
-    if (!drawsResultsWeekly || !Array.isArray(drawsResultsWeekly)) {
-        console.warn('drawsResultsWeekly is not an array or is undefined. No results to process from API.');
-        if (adminOverriddenResults === null && !month) adminOverriddenResults = []; 
-        return adminOverriddenResults ? [...adminOverriddenResults].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
-    }
-
-    const validDrawNames = new Set<string>();
-    Object.values(DRAW_SCHEDULE).forEach(daySchedule => Object.values(daySchedule).forEach(drawName => validDrawNames.add(drawName)));
-
-    const fetchedResults: DrawResult[] = [];
-    const currentSystemYear = getYear(new Date());
-
-    for (const week of drawsResultsWeekly) {
-      if (!week.drawResultsDaily || !Array.isArray(week.drawResultsDaily)) {
-          continue; 
-      }
-      for (const dailyResult of week.drawResultsDaily) {
-        const dateStr = dailyResult.date; 
-        let drawDate: string;
-
-        try {
-          const parts = dateStr.split(' ');
-          if (parts.length < 2) {
-            console.warn(`Unexpected date format from API: ${dateStr}`);
-            continue;
-          }
-          const dayMonth = parts[1]; 
-          const [dayStr, monthStr] = dayMonth.split('/');
-          
-          const parsedDate = parse(`${dayStr}/${monthStr}/${currentSystemYear}`, 'dd/MM/yyyy', new Date());
-          if (!isValid(parsedDate)) {
-            console.warn(`Invalid parsed date for: ${dateStr} with year ${currentSystemYear}`);
-            continue;
-          }
-          drawDate = format(parsedDate, 'yyyy-MM-dd');
-
-        } catch (e) {
-          console.warn(`Error parsing date format from API: ${dateStr}, error: ${e instanceof Error ? e.message : String(e)}`);
-          continue;
-        }
-        
-        if (!dailyResult.drawResults || !dailyResult.drawResults.standardDraws || !Array.isArray(dailyResult.drawResults.standardDraws)) {
-            continue; 
-        }
-
-        for (const draw of dailyResult.drawResults.standardDraws) {
-          const drawName = draw.drawName;
-          
-          if (!validDrawNames.has(drawName) || typeof draw.winningNumbers !== 'string' || draw.winningNumbers.startsWith('.')) {
-            continue;
-          }
-
-          const winningNumbers = (draw.winningNumbers.match(/\d+/g) || []).map(Number).filter(n => n >= 1 && n <= 90);
-          const machineNumbersRaw = draw.machineNumbers;
-          const machineNumbers = (typeof machineNumbersRaw === 'string' ? (machineNumbersRaw.match(/\d+/g) || []) : []).map(Number).filter(n => n >= 1 && n <= 90);
-
-          if (winningNumbers.length === 5) { // Main validation for a usable result
-            fetchedResults.push({
-              id: crypto.randomUUID(), 
-              draw_name: drawName,
-              date: drawDate,
-              gagnants: winningNumbers,
-              machine: machineNumbers.length > 0 ? machineNumbers : undefined,
-            });
-          }
-        }
-      }
-    }
-    
-    if (!month) { 
-        adminOverriddenResults = [...fetchedResults]; 
-        isDataFetchedFromApi = true;
-    }
-
-    if (fetchedResults.length === 0 && !month) {
-      console.warn('Aucun résultat de tirage valide trouvé via API pour la période générale.');
-    }
-    return fetchedResults.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-        console.error(`Axios error fetching ${url}: ${error.message}`, error.response?.data || error.toJSON());
-    } else {
-        console.error(`Error fetching ${url}:`, error);
-    }
-    if (adminOverriddenResults === null && !month) adminOverriddenResults = [];
-    return adminOverriddenResults ? [...adminOverriddenResults].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
-  }
-}
 
 // Helper to compare if two number arrays are identical (order-independent)
 const compareNumberArrays = (arr1?: number[], arr2?: number[]): boolean => {
-  if (arr1 === undefined && arr2 === undefined) return true; // Both undefined
-  if (arr1 === undefined || arr2 === undefined) return false; // One is undefined, other is not
-  if (arr1.length === 0 && arr2.length === 0) return true; // Both empty
+  if (arr1 === undefined && arr2 === undefined) return true;
+  if (arr1 === undefined || arr2 === undefined) return false;
+  if (arr1.length === 0 && arr2.length === 0) return true; // Treat empty arrays as equal to undefined for machine numbers logic
   if (arr1.length !== arr2.length) return false;
   const sorted1 = [...arr1].sort((a, b) => a - b).join(',');
   const sorted2 = [...arr2].sort((a, b) => a - b).join(',');
@@ -178,101 +54,187 @@ const areResultsIdentical = (res1: Omit<DrawResult, 'id'>, res2: Omit<DrawResult
 };
 
 
-// Admin CRUD functions
-export async function addLotteryResult(newResultData: Omit<DrawResult, 'id'>): Promise<DrawResult> {
-  if (adminOverriddenResults === null) {
-    await fetchLotteryResults(); 
+export async function fetchLotteryResults(drawName?: string): Promise<DrawResult[]> {
+  try {
+    const lotteryResultsCol = collection(db, 'lotteryResults');
+    const q = query(
+      lotteryResultsCol,
+      ...(drawName ? [where('draw_name', '==', drawName)] : []),
+      orderBy('date', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    const results = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DrawResult));
+    return results;
+  } catch (error) {
+    console.error("Error fetching lottery results from Firestore:", error);
+    throw new Error(`Failed to fetch lottery results: ${error instanceof Error ? error.message : String(error)}`);
   }
-  // Check for duplicates before adding
-  if (adminOverriddenResults && adminOverriddenResults.some(existingResult => areResultsIdentical(existingResult, newResultData))) {
-    throw new Error("Duplicate result: This lottery result already exists.");
-  }
+}
 
-  const newResult: DrawResult = { ...newResultData, id: crypto.randomUUID() };
-  adminOverriddenResults = [...(adminOverriddenResults || []), newResult];
-  adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  return newResult;
+export async function addLotteryResult(newResultData: Omit<DrawResult, 'id'>): Promise<DrawResult> {
+  try {
+    const lotteryResultsCol = collection(db, 'lotteryResults');
+    // Check for duplicates
+    const q = query(
+      lotteryResultsCol,
+      where('draw_name', '==', newResultData.draw_name),
+      where('date', '==', newResultData.date)
+    );
+    const querySnapshot = await getDocs(q);
+    let isDuplicate = false;
+    querySnapshot.forEach((doc) => {
+      if (areResultsIdentical(doc.data() as Omit<DrawResult, 'id'>, newResultData)) {
+        isDuplicate = true;
+      }
+    });
+
+    if (isDuplicate) {
+      throw new Error("Duplicate result: This lottery result already exists.");
+    }
+
+    const docRef = await addDoc(lotteryResultsCol, newResultData);
+    return { ...newResultData, id: docRef.id };
+  } catch (error) {
+    console.error("Error adding lottery result to Firestore:", error);
+    throw new Error(`Failed to add lottery result: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export async function addMultipleDrawResults(
   newRawResults: Array<Omit<DrawResult, 'id'>>
-): Promise<{ added: DrawResult[]; duplicates: number }> {
-  if (adminOverriddenResults === null) {
-    await fetchLotteryResults(); 
-  }
+): Promise<{ added: DrawResult[]; duplicates: number; errors: string[] }> {
   const addedResults: DrawResult[] = [];
   let duplicateCount = 0;
+  const errorMessages: string[] = [];
+  const lotteryResultsCol = collection(db, 'lotteryResults');
 
-  newRawResults.forEach(rawResult => {
-    // Ensure 'gagnants' always has 5 valid numbers and 'machine' has 0-5 valid numbers.
-    // This validation should ideally be done before calling this function (e.g., in AdminImageImport)
-    // but we can add a basic check here as a safeguard.
+  for (const rawResult of newRawResults) {
     if (!rawResult.gagnants || rawResult.gagnants.length !== 5 || !rawResult.gagnants.every(n => n >= 1 && n <= 90)) {
-        console.warn("Skipping invalid raw result due to 'gagnants' criteria in addMultipleDrawResults:", rawResult);
-        return; // Skip this result
+      const msg = `Skipped invalid result for ${rawResult.draw_name} on ${rawResult.date} due to 'gagnants' criteria.`;
+      console.warn(msg, rawResult);
+      errorMessages.push(msg);
+      continue;
     }
-    if (rawResult.machine && !rawResult.machine.every(n => n >= 1 && n <= 90)) {
-        console.warn("Skipping invalid raw result due to 'machine' criteria in addMultipleDrawResults:", rawResult);
-        return; // Skip this result
+    if (rawResult.machine && (!Array.isArray(rawResult.machine) || !rawResult.machine.every(n => n >= 1 && n <= 90))) {
+      const msg = `Skipped invalid result for ${rawResult.draw_name} on ${rawResult.date} due to 'machine' criteria.`;
+      console.warn(msg, rawResult);
+      errorMessages.push(msg);
+      continue;
     }
 
+    try {
+      const q = query(
+        lotteryResultsCol,
+        where('draw_name', '==', rawResult.draw_name),
+        where('date', '==', rawResult.date)
+      );
+      const querySnapshot = await getDocs(q);
+      let isDuplicate = false;
+      querySnapshot.forEach((doc) => {
+        if (areResultsIdentical(doc.data() as Omit<DrawResult, 'id'>, rawResult)) {
+          isDuplicate = true;
+        }
+      });
 
-    const isDuplicate = adminOverriddenResults?.some(existingResult =>
-      areResultsIdentical(existingResult, rawResult)
-    ) || false;
-
-    if (isDuplicate) {
-      duplicateCount++;
-    } else {
-      const newResult: DrawResult = { ...rawResult, id: crypto.randomUUID() };
-      adminOverriddenResults = [...(adminOverriddenResults || []), newResult];
-      addedResults.push(newResult);
+      if (isDuplicate) {
+        duplicateCount++;
+      } else {
+        const newResultRef = await addDoc(lotteryResultsCol, { ...rawResult });
+        addedResults.push({ ...rawResult, id: newResultRef.id });
+      }
+    } catch (e) {
+      const firestoreError = e instanceof Error ? e.message : String(e);
+      console.error(`Firestore error processing result for draw ${rawResult.draw_name} on ${rawResult.date}: ${firestoreError}`, rawResult);
+      errorMessages.push(`Failed to save ${rawResult.draw_name} (${rawResult.date}): ${firestoreError.substring(0, 100)}`);
     }
-  });
-
-  if (adminOverriddenResults) {
-    adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
-  return { added: addedResults, duplicates: duplicateCount };
+  return { added: addedResults, duplicates: duplicateCount, errors: errorMessages };
 }
 
 
 export async function updateLotteryResult(updatedResult: DrawResult): Promise<DrawResult> {
-  if (adminOverriddenResults === null) {
-    throw new Error("No results loaded to update.");
+  try {
+    const resultDocRef = doc(db, 'lotteryResults', updatedResult.id);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, ...dataToUpdate } = updatedResult; // Firestore updates don't need the id in the data payload
+    await updateDoc(resultDocRef, dataToUpdate);
+    return updatedResult;
+  } catch (error) {
+    console.error("Error updating lottery result in Firestore:", error);
+    throw new Error(`Failed to update lottery result: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const index = adminOverriddenResults.findIndex(r => r.id === updatedResult.id);
-  if (index === -1) {
-    throw new Error(`Result with id ${updatedResult.id} not found.`);
-  }
-  adminOverriddenResults[index] = updatedResult;
-  adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  return updatedResult;
 }
 
 export async function deleteLotteryResult(resultId: string): Promise<void> {
-  if (adminOverriddenResults === null) {
-    return; 
+  try {
+    const resultDocRef = doc(db, 'lotteryResults', resultId);
+    await deleteDoc(resultDocRef);
+  } catch (error) {
+    console.error("Error deleting lottery result from Firestore:", error);
+    throw new Error(`Failed to delete lottery result: ${error instanceof Error ? error.message : String(error)}`);
   }
-  adminOverriddenResults = adminOverriddenResults.filter(r => r.id !== resultId);
 }
 
-export async function setAllLotteryResults(results: DrawResult[]): Promise<void> {
-  adminOverriddenResults = results.map(r => ({...r, id: r.id || crypto.randomUUID() }));
-  isDataFetchedFromApi = true; 
-  adminOverriddenResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+export async function setAllLotteryResults(importedResults: DrawResult[]): Promise<{ importedCount: number; errorCount: number; errorDetails: string[]}> {
+  
+  let importedCount = 0;
+  let errorCount = 0;
+  const errorDetails: string[] = [];
+
+  try {
+    // Delete existing results for the draw names being imported
+    const uniqueDrawNames = [...new Set(importedResults.map(r => r.draw_name))];
+    if (uniqueDrawNames.length > 0) {
+      const deleteBatch = writeBatch(db);
+      for (const drawName of uniqueDrawNames) {
+        const q = query(collection(db, 'lotteryResults'), where('draw_name', '==', drawName));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(docSnap => deleteBatch.delete(docSnap.ref));
+      }
+      await deleteBatch.commit();
+    }
+  } catch(e) {
+     const firestoreError = e instanceof Error ? e.message : String(e);
+     console.error("Error deleting old results during JSON import:", firestoreError);
+     errorDetails.push(`Failed to clear old results: ${firestoreError}`);
+     // Consider this a major error affecting the import's intention
+     return { importedCount: 0, errorCount: importedResults.length, errorDetails };
+  }
+  
+  // Using a new batch for additions
+  const addBatch = writeBatch(db);
+  for (const result of importedResults) {
+    try {
+        // Ensure IDs are not part of the data being written if Firestore generates them.
+        // If results have IDs from export, they are document IDs for .set operation.
+        const { id, ...dataToWrite } = result;
+        const docRef = id ? doc(db, 'lotteryResults', id) : doc(collection(db, 'lotteryResults'));
+        addBatch.set(docRef, dataToWrite); // Use set to handle cases where ID might be from export
+        importedCount++;
+    } catch (e) {
+        const importError = e instanceof Error ? e.message : String(e);
+        console.error(`Error preparing batch add for result: ${importError}`, result);
+        errorDetails.push(`Error for ${result.draw_name} on ${result.date}: ${importError.substring(0,100)}`);
+        errorCount++;
+    }
+  }
+
+  try {
+    await addBatch.commit();
+  } catch(e) {
+     const firestoreError = e instanceof Error ? e.message : String(e);
+     console.error("Error committing batch add during JSON import:", firestoreError);
+     errorDetails.push(`Batch import commit failed: ${firestoreError}`);
+     // If batch commit fails, none of the items in this batch were successfully imported
+     return { importedCount: 0, errorCount: importedResults.length, errorDetails };
+  }
+
+  return { importedCount, errorCount, errorDetails };
 }
+
 
 export async function getAllLotteryResultsForExport(): Promise<DrawResult[]> {
-  if (adminOverriddenResults === null) {
-    await fetchLotteryResults(); 
-  }
-  return adminOverriddenResults ? [...adminOverriddenResults] : [];
-}
-
-export async function clearAdminCache(): Promise<void> {
-  adminOverriddenResults = null;
-  isDataFetchedFromApi = false; // Reset this flag so next fetch goes to API
+    return fetchLotteryResults(); // Simply fetch all results
 }
 
 
@@ -280,12 +242,12 @@ export async function clearAdminCache(): Promise<void> {
 export function analyzeFrequencies(draws: DrawResult[]): { [key: number]: number } {
   const allNumbers = draws.flatMap(draw => draw.gagnants);
   const frequency: { [key: number]: number } = {};
-  for (let i = 1; i <= 90; i++) { 
+  for (let i = 1; i <= 90; i++) {
     frequency[i] = 0;
   }
-  allNumbers.forEach(num => { 
-    if (num >=1 && num <= 90) { 
-      frequency[num] = (frequency[num] || 0) + 1; 
+  allNumbers.forEach(num => {
+    if (num >=1 && num <= 90) {
+      frequency[num] = (frequency[num] || 0) + 1;
     }
   });
   return frequency;
@@ -301,7 +263,7 @@ function analyzeSuccessivePairs(draws: DrawResult[]): Array<{ date1: string; dat
   });
 
   for (let i = 0; i < sortedDraws.length - 1; i++) {
-    if (sortedDraws[i].draw_name === sortedDraws[i+1].draw_name) { 
+    if (sortedDraws[i].draw_name === sortedDraws[i+1].draw_name) {
         const currentDraw = new Set(sortedDraws[i].gagnants);
         const nextDraw = new Set(sortedDraws[i + 1].gagnants);
         const commonNumbers = [...currentDraw].filter(num => nextDraw.has(num));
@@ -320,27 +282,25 @@ function analyzeSuccessivePairs(draws: DrawResult[]): Array<{ date1: string; dat
 // Modélisation bayésienne avec apprentissage des erreurs
 function bayesianProbabilities(frequencies: { [key: number]: number }, pastPredictions: Prediction[]): { [key: number]: number } {
   const totalWinningNumbers = Object.values(frequencies).reduce((sum, count) => sum + count, 0);
-  const totalDraws = totalWinningNumbers > 0 ? Math.max(1, totalWinningNumbers / 5) : 0; 
-  
+  const totalDraws = totalWinningNumbers > 0 ? Math.max(1, totalWinningNumbers / 5) : 0;
   const probabilities: { [key: number]: number } = {};
-  const alpha = 1; 
-  const N = 90; 
+  const alpha = 1;
+  const N = 90;
 
   for (let num = 1; num <= N; num++) {
     const observedCount = frequencies[num] || 0;
-    let errorAdjustmentScore = 0; 
+    let errorAdjustmentScore = 0;
 
     pastPredictions.forEach(pred => {
-      if (pred.actual) { 
-        if (pred.predicted.includes(num) && !pred.actual.includes(num)) errorAdjustmentScore -= 0.05; 
-        if (!pred.predicted.includes(num) && pred.actual.includes(num)) errorAdjustmentScore += 0.05; 
+      if (pred.actual) {
+        if (pred.predicted.includes(num) && !pred.actual.includes(num)) errorAdjustmentScore -= 0.05;
+        if (!pred.predicted.includes(num) && pred.actual.includes(num)) errorAdjustmentScore += 0.05;
       }
     });
-    
-    const adjustedObservedCount = Math.max(0, observedCount + (observedCount * errorAdjustmentScore)); 
 
+    const adjustedObservedCount = Math.max(0, observedCount + (observedCount * errorAdjustmentScore));
     probabilities[num] = (adjustedObservedCount + alpha) / (totalDraws + N * alpha);
-    if(probabilities[num] < 0) probabilities[num] = 0; 
+    if(probabilities[num] < 0) probabilities[num] = 0;
   }
   return probabilities;
 }
@@ -348,24 +308,23 @@ function bayesianProbabilities(frequencies: { [key: number]: number }, pastPredi
 // Génération de combinaison
 function generateCombination(probabilities: { [key: number]: number }): number[] {
   const numbers = Object.keys(probabilities).map(Number).filter(n => n >= 1 && n <=90);
-  
-  const popularNumbers = [1, 2, 3, 4, 5, 7, 13, 15, 23, 27, 31]; 
+  const popularNumbers = [1, 2, 3, 4, 5, 7, 13, 15, 23, 27, 31];
   const adjustedProbabilitiesMap: {[key: number]: number } = {};
-  
+
   numbers.forEach(num => {
       adjustedProbabilitiesMap[num] = Math.max(0, popularNumbers.includes(num) ? (probabilities[num] || 0) * 0.8 : (probabilities[num] || 0));
   });
 
   let availableNumbers = Object.keys(adjustedProbabilitiesMap).map(Number);
-  let availableProbs = availableNumbers.map(num => Math.max(0, adjustedProbabilitiesMap[num] || 0)); 
+  let availableProbs = availableNumbers.map(num => Math.max(0, adjustedProbabilitiesMap[num] || 0));
 
   const combination: number[] = [];
-  
-  if (availableNumbers.length < 5) { 
+
+  if (availableNumbers.length < 5) {
     console.warn("Not enough unique numbers with positive probability for weighted selection. Filling randomly.");
     const randomSet = new Set<number>();
     let sourceForRandom = availableNumbers.length > 0 ? [...availableNumbers] : Array.from({length: 90}, (_, i) => i + 1);
-    
+
     while(randomSet.size < 5 && sourceForRandom.length > 0) {
         const randomIndex = Math.floor(Math.random() * sourceForRandom.length);
         randomSet.add(sourceForRandom.splice(randomIndex, 1)[0]);
@@ -375,13 +334,13 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
 
   for (let k=0; k<5; k++) {
     const currentTotalProbSum = availableProbs.reduce((sum, p) => sum + p, 0);
-    if (currentTotalProbSum <= 0) { 
+    if (currentTotalProbSum <= 0) {
         const remainingAvailableForFill = availableNumbers.filter(n => !combination.includes(n));
         while(combination.length < 5 && remainingAvailableForFill.length > 0) {
             const randIdx = Math.floor(Math.random() * remainingAvailableForFill.length);
             combination.push(remainingAvailableForFill.splice(randIdx, 1)[0]);
         }
-        break; 
+        break;
     }
 
     const r = Math.random() * currentTotalProbSum;
@@ -395,167 +354,92 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
         break;
       }
     }
-    
+
     if (chosenIndex !== -1 && availableNumbers[chosenIndex] !== undefined) {
       combination.push(availableNumbers[chosenIndex]);
-      availableNumbers.splice(chosenIndex, 1); 
-      availableProbs.splice(chosenIndex, 1); 
-    } else if (availableNumbers.length > 0) { 
+      availableNumbers.splice(chosenIndex, 1);
+      availableProbs.splice(chosenIndex, 1);
+    } else if (availableNumbers.length > 0) {
         let fallbackIndex = Math.floor(Math.random() * availableNumbers.length);
         combination.push(availableNumbers[fallbackIndex]);
         availableNumbers.splice(fallbackIndex, 1);
         if (availableProbs.length > fallbackIndex) availableProbs.splice(fallbackIndex, 1);
     } else {
-      break; 
+      break;
     }
   }
   return combination.sort((a, b) => a - b);
 }
 
-// --- IndexedDB ---
-const DB_NAME = 'LotoAnalyseDB';
-const DB_VERSION = 1;
-const PREDICTIONS_STORE_NAME = 'predictions_v1'; 
 
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined' || !window.indexedDB) {
-      console.warn('IndexedDB is not supported in this environment. Prediction history will not be saved.');
-      return reject(new Error('IndexedDB is not supported.'));
-    }
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = event => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(PREDICTIONS_STORE_NAME)) {
-        const store = db.createObjectStore(PREDICTIONS_STORE_NAME, { keyPath: 'id', autoIncrement: true });
-        store.createIndex('drawNameDateIndex', ['draw_name', 'date'], { unique: false });
-      }
-    };
-    request.onsuccess = event => resolve((event.target as IDBOpenDBRequest).result);
-    request.onerror = event => reject(new Error(`Database error: ${(event.target as IDBOpenDBRequest).error?.message}`));
-  });
-}
+// --- Firestore for Predictions ---
+const PREDICTIONS_COLLECTION = 'predictions';
 
-export async function savePrediction(prediction: Omit<Prediction, 'id'>): Promise<number> {
- try {
-    const db = await openDB();
-    return new Promise<number>((resolve, reject) => {
-      const transaction = db.transaction([PREDICTIONS_STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(PREDICTIONS_STORE_NAME);
-      const addRequest = store.add(prediction); 
-      addRequest.onsuccess = () => resolve(addRequest.result as number);
-      addRequest.onerror = (event) => reject(new Error(`Failed to save prediction: ${(event.target as IDBRequest).error?.message}`));
-      transaction.oncomplete = () => db.close();
-      transaction.onerror = (event) => {
-        console.error("Transaction error (savePrediction):", (event.target as IDBTransaction).error);
-        reject(new Error(`Transaction error (save): ${(event.target as IDBTransaction).error?.message}`));
-      };
-    });
+export async function savePrediction(predictionData: Omit<Prediction, 'id'>): Promise<Prediction> {
+  try {
+    const docRef = await addDoc(collection(db, PREDICTIONS_COLLECTION), predictionData);
+    return { ...predictionData, id: docRef.id };
   } catch (error) {
-    console.warn(`Could not save prediction (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}`);
-    throw error; 
+    console.error("Error saving prediction to Firestore:", error);
+    throw new Error(`Failed to save prediction: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 export async function getPastPredictions(drawName?: string): Promise<Prediction[]> {
-   try {
-    const db = await openDB();
-    return new Promise<Prediction[]>((resolve, reject) => {
-      const transaction = db.transaction([PREDICTIONS_STORE_NAME], 'readonly');
-      const store = transaction.objectStore(PREDICTIONS_STORE_NAME);
-      const request = store.getAll(); 
-      
-      request.onsuccess = () => {
-        let results = (request.result || []) as Prediction[];
-        if (drawName) {
-            results = results.filter(p => p && p.draw_name === drawName);
-        }
-        resolve(results);
-      };
-      request.onerror = (event) => reject(new Error(`Failed to retrieve predictions: ${(event.target as IDBRequest).error?.message}`));
-      transaction.oncomplete = () => db.close();
-      transaction.onerror = (event) => {
-        console.error("Transaction error (getPastPredictions):", (event.target as IDBTransaction).error);
-        reject(new Error(`Transaction error (get): ${(event.target as IDBTransaction).error?.message}`));
-      };
-    });
+  try {
+    const predictionsCol = collection(db, PREDICTIONS_COLLECTION);
+    const q = query(
+      predictionsCol,
+      ...(drawName ? [where('draw_name', '==', drawName)] : []),
+      orderBy('date', 'desc') // Assuming you want them sorted, typically by date
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Prediction));
   } catch (error) {
-    console.warn(`Could not get past predictions (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}. Returning empty array.`);
-    return []; 
+    console.error("Error fetching past predictions from Firestore:", error);
+    throw new Error(`Failed to fetch past predictions: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-export async function updatePredictionActual(id: number, actual: number[]): Promise<void> {
+export async function updatePredictionActual(predictionId: string, actualResults: number[]): Promise<void> {
   try {
-    const db = await openDB();
-    return new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction([PREDICTIONS_STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(PREDICTIONS_STORE_NAME);
-      const getRequest = store.get(id);
-
-      getRequest.onsuccess = () => {
-        const prediction = getRequest.result as Prediction | undefined;
-        if (prediction) {
-          prediction.actual = actual;
-          const putRequest = store.put(prediction);
-          putRequest.onsuccess = () => resolve();
-          putRequest.onerror = (event) => reject(new Error(`Failed to update prediction (put): ${(event.target as IDBRequest).error?.message}`));
-        } else {
-          reject(new Error('Prediction not found for update. ID: ' + id));
-        }
-      };
-      getRequest.onerror = (event) => reject(new Error(`Failed to get prediction for update: ${(event.target as IDBRequest).error?.message}`));
-      
-      transaction.oncomplete = () => db.close();
-      transaction.onerror = (event) => {
-         console.error("Transaction error (updatePredictionActual):", (event.target as IDBTransaction).error);
-         reject(new Error(`Transaction error (update): ${(event.target as IDBTransaction).error?.message}`));
-      };
-    });
+    const predictionDocRef = doc(db, PREDICTIONS_COLLECTION, predictionId);
+    await updateDoc(predictionDocRef, { actual: actualResults });
   } catch (error) {
-     console.warn(`Could not update prediction (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}`);
-     throw error;
+    console.error("Error updating prediction actual results in Firestore:", error);
+    throw new Error(`Failed to update prediction actual results: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 export async function clearAllPredictions(): Promise<void> {
   try {
-    const db = await openDB();
-    return new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction([PREDICTIONS_STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(PREDICTIONS_STORE_NAME);
-      const clearRequest = store.clear();
-      clearRequest.onsuccess = () => resolve();
-      clearRequest.onerror = (event) => reject(new Error(`Failed to clear predictions: ${(event.target as IDBRequest).error?.message}`));
-      transaction.oncomplete = () => db.close();
-      transaction.onerror = (event) => {
-        console.error("Transaction error (clearAllPredictions):", (event.target as IDBTransaction).error);
-        reject(new Error(`Transaction error (clear predictions): ${(event.target as IDBTransaction).error?.message}`));
-      };
-    });
+    const predictionsCol = collection(db, PREDICTIONS_COLLECTION);
+    const snapshot = await getDocs(predictionsCol);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
   } catch (error) {
-    console.warn(`Could not clear predictions (IndexedDB likely unavailable): ${error instanceof Error ? error.message : String(error)}`);
-    // Do not re-throw, allow UI to report success if DB is just unavailable
+    console.error("Error clearing all predictions from Firestore:", error);
+    throw new Error(`Failed to clear all predictions: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 // Fonction principale pour générer une prédiction - Exported
-export async function generatePrediction(drawName: string, month?: string): Promise<PredictionResultType> {
-  const draws = await fetchLotteryResults(month); 
-  const filteredDraws = draws.filter(draw => draw.draw_name === drawName);
-  
-  if (filteredDraws.length === 0) {
-      console.warn(`No historical data found for draw '${drawName}' for the specified period/filters to generate prediction.`);
-      return { 
+export async function generatePrediction(drawName: string): Promise<PredictionResultType> {
+  const draws = await fetchLotteryResults(drawName); // Fetch for specific draw name
+
+  if (draws.length === 0) {
+      console.warn(`No historical data found for draw '${drawName}' to generate prediction.`);
+      return {
           bayesianProbabilities: {},
           suggestedCombination: [],
           successivePairs: []
       };
   }
 
-  const frequencies = analyzeFrequencies(filteredDraws);
-  const successivePairs = analyzeSuccessivePairs(filteredDraws);
-  const pastPredictions = await getPastPredictions(drawName); 
+  const frequencies = analyzeFrequencies(draws);
+  const successivePairs = analyzeSuccessivePairs(draws); // This will use only draws for the specific drawName
+  const pastPredictions = await getPastPredictions(drawName);
   const bayesianProbabilitiesResult = bayesianProbabilities(frequencies, pastPredictions);
   const suggestedCombinationResult = generateCombination(bayesianProbabilitiesResult);
 
@@ -565,4 +449,3 @@ export async function generatePrediction(drawName: string, month?: string): Prom
     successivePairs: successivePairs,
   };
 }
-
