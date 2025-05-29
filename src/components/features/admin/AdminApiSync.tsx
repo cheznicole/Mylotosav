@@ -34,18 +34,21 @@ export function AdminApiSync() {
       summaryMessage += `Added ${added.length} new results to Firestore. `;
       summaryMessage += `Skipped ${duplicates} duplicates. `;
       
+      const hasPermissionError = firestoreErrors.some(err => err.toLowerCase().includes("permission"));
+
       if (firestoreErrors.length > 0) {
         const firestoreErrorDetails = firestoreErrors.join("; ");
-        const permissionHint = firestoreErrors.some(err => err.toLowerCase().includes("permission"))
-          ? " This may be due to Firestore security rules. Please ensure the admin user has write permissions."
-          : "";
-        summaryMessage += `${firestoreErrors.length} Firestore save errors occurred. ${permissionHint}`;
+        let permissionHint = "";
+        if (hasPermissionError) {
+            permissionHint = " CRITICAL: This is likely due to Firestore security rules denying write access. Please ensure your rules allow admin users to write to the 'lotteryResults' collection and that the logged-in user has admin custom claims.";
+        }
+        summaryMessage += `${firestoreErrors.length} Firestore save errors occurred.${permissionHint}`;
         setSyncError(`Firestore save errors: ${firestoreErrorDetails}.${permissionHint}`);
          toast({
             variant: "destructive",
             title: "API Sync - Partial Success with Errors",
             description: summaryMessage + " Check console for details.",
-            duration: 10000,
+            duration: 15000, // Increased duration for critical error
         });
       } else if (added.length === 0 && duplicates > 0 && scrapedResults.length > 0) {
          toast({
@@ -77,11 +80,13 @@ export function AdminApiSync() {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during API sync.";
-      const permissionHint = errorMessage.toLowerCase().includes("permission")
-        ? " This may be due to Firestore security rules. Please ensure the admin user has write permissions."
-        : "";
+      const isPermissionError = errorMessage.toLowerCase().includes("permission");
+      let permissionHint = "";
+      if (isPermissionError) {
+          permissionHint = " CRITICAL: This could be due to Firestore security rules denying write access. Please ensure your rules allow admin users to write to the 'lotteryResults' collection and that the logged-in user has admin custom claims.";
+      }
       setSyncError(`${errorMessage}${permissionHint}`);
-      toast({ variant: "destructive", title: "API Sync Error", description: `${errorMessage}${permissionHint}`, duration: 9000 });
+      toast({ variant: "destructive", title: "API Sync Error", description: `${errorMessage}${permissionHint}`, duration: 15000 }); // Increased duration
       console.error("API Sync error:", error);
     } finally {
       setIsSyncing(false);
@@ -104,6 +109,12 @@ export function AdminApiSync() {
             <div>
               <p className="font-semibold">Sync Problem Occurred</p>
               <p className="text-sm">{syncError}</p>
+              {syncError.toLowerCase().includes("permission") && (
+                <p className="text-sm mt-2 font-medium">
+                  ACTION REQUIRED: Please check your Firestore security rules in the Firebase console.
+                  Admin users need write permission to the 'lotteryResults' collection and must have 'admin' custom claims.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -119,5 +130,6 @@ export function AdminApiSync() {
     </Card>
   );
 }
+    
 
     
