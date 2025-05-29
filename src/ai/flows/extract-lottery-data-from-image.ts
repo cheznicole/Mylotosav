@@ -71,16 +71,26 @@ const extractLotteryDataFromImageFlow = ai.defineFlow(
   async input => {
     const {output} = await extractPrompt(input);
     if (!output) {
-        throw new Error("AI failed to extract data from the image.");
+        throw new Error("AI failed to extract data from the image. The output was null or undefined.");
     }
     // Basic validation on AI output
-    if (!output.drawName || output.results.length === 0) {
-        throw new Error("AI output is missing drawName or results. Please ensure the image is clear and contains valid lottery data.");
+    if (!output.drawName || typeof output.drawName !== 'string' || output.drawName.trim() === "") {
+        throw new Error("AI output is missing a valid drawName. Please ensure the image is clear and contains valid lottery data.");
     }
-    output.results.forEach(result => {
-        if(result.winningNumbers.length !== 5 || result.machineNumbers.length !== 5) {
-            console.warn("Potentially incomplete data row from AI:", result);
-            // Depending on strictness, could throw error here
+    if (!output.results || !Array.isArray(output.results) || output.results.length === 0) {
+        // It's possible an image has a draw name but no result rows, this might not always be an error.
+        // However, for typical use, we expect some results.
+        console.warn("AI output returned no result rows. DrawName:", output.drawName);
+        // Depending on strictness, could throw an error here. For now, allow it but log.
+    }
+    output.results.forEach((result, index) => {
+        if(!result.winningNumbers || result.winningNumbers.length !== 5) {
+            console.warn(`Potentially incomplete winningNumbers for result at index ${index} from AI:`, result.winningNumbers);
+            // Consider how to handle this, e.g., filter out this specific result or throw.
+            // For now, relies on frontend validation in AdminImageImport.tsx
+        }
+        if(!result.machineNumbers || result.machineNumbers.length !== 5) {
+             console.warn(`Potentially incomplete machineNumbers for result at index ${index} from AI:`, result.machineNumbers);
         }
     });
     return output;

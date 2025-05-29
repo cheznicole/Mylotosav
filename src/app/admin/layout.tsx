@@ -5,19 +5,33 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AlertTriangle, Loader2 } from 'lucide-react'; // Added Loader2
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Added Alert components
 
 interface AdminLayoutProps {
   children: ReactNode;
 }
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const { currentUser, isAdmin, loading } = useAuth();
+  const { currentUser, isAdmin, loading, logout } = useAuth(); // Added logout
   const router = useRouter();
   const [localRedirecting, setLocalRedirecting] = useState(false);
+  const [showSlowLoadingMessage, setShowSlowLoadingMessage] = useState(false);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (loading) {
+      timer = setTimeout(() => {
+        setShowSlowLoadingMessage(true);
+      }, 7000); // Show message after 7 seconds of loading
+    } else {
+      setShowSlowLoadingMessage(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   useEffect(() => {
     if (!loading) {
-      // Log current auth state once loading is complete, for debugging
       console.log('[AdminLayout] Auth State Resolved:', {
         currentUser: !!currentUser,
         isAdmin,
@@ -25,56 +39,66 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       });
     }
 
-    // If auth state is still loading, or if we've already initiated a redirect, do nothing.
     if (loading || localRedirecting) {
       return;
     }
 
-    // Auth state is resolved (loading is false) and no redirect initiated yet.
     if (!currentUser) {
       setLocalRedirecting(true);
       router.replace('/login?message=unauthenticated');
     } else if (!isAdmin) {
       setLocalRedirecting(true);
-      router.replace('/login?message=unauthorized');
+      // If user is authenticated but not admin, log them out and redirect
+      // This prevents them from being stuck in a loop if they are logged in as non-admin
+      logout().finally(() => {
+         router.replace('/login?message=unauthorized');
+      });
     }
-    // If currentUser and isAdmin are true, localRedirecting remains false, and component proceeds to render children.
 
-  }, [currentUser, isAdmin, loading, router, localRedirecting]);
+  }, [currentUser, isAdmin, loading, router, localRedirecting, logout]);
 
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <p className="text-lg text-muted-foreground mb-4">Vérification de l'authentification...</p>
-        <Skeleton className="h-12 w-1/2 mb-4" />
-        <Skeleton className="h-8 w-1/4 mb-6" />
-        <div className="w-full max-w-4xl space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-64 w-full" />
-        </div>
-        <p className="text-sm text-muted-foreground mt-4">
-            Si cela prend beaucoup de temps, veuillez vérifier votre connexion internet et vous assurer
-            que les revendications d'administrateur (custom claims) sont correctement configurées dans Firebase.
-            Vérifiez également la console de votre navigateur pour des erreurs spécifiques.
-        </p>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-6" />
+        <p className="text-xl text-muted-foreground mb-4">Vérification de l'authentification...</p>
+        <Skeleton className="h-10 w-3/4 md:w-1/2 mb-4" />
+        <Skeleton className="h-8 w-1/2 md:w-1/3 mb-6" />
+        
+        {showSlowLoadingMessage && (
+            <Alert variant="default" className="max-w-lg mt-6 text-left bg-card border-border">
+                <AlertTriangle className="h-5 w-5 text-primary" />
+                <AlertTitle className="font-semibold text-primary">Chargement Prolongé</AlertTitle>
+                <AlertDescription className="text-sm text-card-foreground">
+                    La vérification prend plus de temps que prévu. Veuillez vérifier :
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                        <li>Votre connexion internet.</li>
+                        <li>Que les revendications d'administrateur (custom claims `admin:true`) sont correctement configurées dans Firebase Authentication pour votre compte.</li>
+                        <li>La console de votre navigateur (F12) pour des erreurs spécifiques de Firebase ou de réseau.</li>
+                    </ul>
+                    Si le problème persiste, contactez le support technique.
+                </AlertDescription>
+            </Alert>
+        )}
       </div>
     );
   }
 
-  // If loading is false, but conditions for access are not met
-  // This state is primarily for the brief moment while router.replace() is taking effect.
   if (!currentUser || !isAdmin) {
     return (
-         <div className="flex flex-col items-center justify-center min-h-screen p-4">
-            <p className="text-lg text-muted-foreground">
-              {localRedirecting ? "Redirection vers la page de connexion..." : "Accès non autorisé. Préparation de la redirection..."}
+         <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-6" />
+            <p className="text-xl text-muted-foreground">
+              {localRedirecting ? "Redirection en cours..." : "Accès non autorisé. Préparation de la redirection..."}
             </p>
-            <Skeleton className="h-12 w-1/2 mt-4" />
+             <p className="text-sm text-muted-foreground mt-2">
+                Vous serez redirigé vers la page de connexion.
+             </p>
+            <Skeleton className="h-10 w-3/4 md:w-1/2 mt-6" />
         </div>
     );
   }
 
-  // If loading is false, and currentUser and isAdmin are true
   return <>{children}</>;
 }

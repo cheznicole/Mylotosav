@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { UploadCloud, Loader2, AlertTriangle, CheckCircle2, FileWarning } from "lucide-react";
+import { UploadCloud, Loader2, AlertTriangle, CheckCircle2, FileWarning, Info } from "lucide-react"; // Added Info
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; // Added Alert components
 import { extractLotteryDataFromImage, type ExtractLotteryDataOutput } from "@/ai/flows/extract-lottery-data-from-image";
 import type { DrawResult } from "@/services/lotteryApi";
 import { addMultipleDrawResults } from "@/services/lotteryApi";
@@ -61,7 +62,7 @@ export function AdminImageImport() {
   const [isImporting, setIsImporting] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [extractedData, setExtractedData] = useState<ExtractLotteryDataOutput | null>(null);
+  const [extractedData, setExtractedData] = useState<ExtractLotteryDataOutput | null>(null); // Kept for potential debugging, not directly shown
   const [importError, setImportError] = useState<string | null>(null); 
   const [processingSummary, setProcessingSummary] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -86,7 +87,7 @@ export function AdminImageImport() {
 
   const handleImageImport = async () => {
     if (!selectedImage || !imagePreview) {
-      toast({ variant: "destructive", title: "No Image", description: "Please select an image to import." });
+      toast({ variant: "destructive", title: "Aucune Image", description: "Veuillez sélectionner une image à importer." });
       return;
     }
 
@@ -94,15 +95,32 @@ export function AdminImageImport() {
     setImportError(null);
     setExtractedData(null);
     setProcessingSummary(null);
+    let aiResult: ExtractLotteryDataOutput;
 
     try {
-      const aiResult = await extractLotteryDataFromImage({ imageDataUri: imagePreview });
-      setExtractedData(aiResult);
+      toast({title: "Traitement IA en cours...", description: "Extraction des données de l'image."});
+      aiResult = await extractLotteryDataFromImage({ imageDataUri: imagePreview });
+      setExtractedData(aiResult); // Store AI result for potential debugging
 
-      if (!aiResult.drawName || !aiResult.results || aiResult.results.length === 0) {
-        throw new Error("AI did not return a valid draw name or any results.");
+      if (!aiResult || !aiResult.drawName || !aiResult.results ) {
+        throw new Error("L'IA n'a pas retourné un nom de tirage valide ou des résultats.");
+      }
+      if (aiResult.results.length === 0) {
+         const noResultsMessage = `L'IA a extrait le nom du tirage "${aiResult.drawName}" mais n'a trouvé aucune ligne de résultat dans l'image.`;
+         setProcessingSummary(noResultsMessage);
+         toast({
+             title: "Aucune Donnée de Résultat Extraite",
+             description: noResultsMessage,
+             className: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/30",
+             duration: 9000
+         });
+         setIsImporting(false);
+         if (fileInputRef.current) fileInputRef.current.value = "";
+         return;
       }
       
+      toast({title: "Données extraites par IA", description: `Traitement des ${aiResult.results.length} lignes pour le tirage "${aiResult.drawName}".`});
+
       const resultsToProcess: Array<Omit<DrawResult, 'id'>> = [];
       let parsingErrorsCount = 0;
       let invalidWinningNumbersCount = 0;
@@ -128,13 +146,17 @@ export function AdminImageImport() {
           draw_name: aiResult.drawName,
           date: parsedDateStr,
           gagnants: validWinningNumbers,
-          machine: validMachineNumbers.length > 0 ? validMachineNumbers : undefined,
+          machine: validMachineNumbers.length > 0 ? validMachineNumbers : undefined, // Ensure undefined if empty for Firestore
         });
       }
       
+      let summary = `Tirage: ${aiResult.drawName}. IA Extraites: ${aiResult.results.length}. `;
+      summary += `Traitables: ${resultsToProcess.length}. Erreurs Date: ${parsingErrorsCount}. Erreurs Numéros Gagnants: ${invalidWinningNumbersCount}.`;
+
       if (resultsToProcess.length === 0 && aiResult.results.length > 0) {
-         const errorDetail = invalidWinningNumbersCount > 0 ? `${invalidWinningNumbersCount} entries had invalid winning numbers.` : `${parsingErrorsCount} entries had date parsing errors.`;
-         throw new Error(`No valid results could be processed from the AI output. ${errorDetail} Check console for details.`);
+         const errorDetail = invalidWinningNumbersCount > 0 ? `${invalidWinningNumbersCount} entrées avaient des numéros gagnants invalides.` : `${parsingErrorsCount} entrées avaient des erreurs de parsing de date.`;
+         setProcessingSummary(summary);
+         throw new Error(`Aucun résultat valide n'a pu être traité à partir de la sortie IA. ${errorDetail} Vérifiez la console pour les détails.`);
       }
       
       let addedCount = 0;
@@ -142,84 +164,84 @@ export function AdminImageImport() {
       let firestoreErrorMessages: string[] = [];
 
       if (resultsToProcess.length > 0) {
+        toast({title: "Sauvegarde Firestore...", description: `Tentative d'ajout de ${resultsToProcess.length} résultats pour "${aiResult.drawName}".`});
         const { added, duplicates, errors: fsErrors } = await addMultipleDrawResults(resultsToProcess);
         addedCount = added.length;
         duplicateCount = duplicates;
         firestoreErrorMessages = fsErrors;
         
-        const summary = `Draw: ${aiResult.drawName}. AI Extracted: ${aiResult.results.length}. Processable: ${resultsToProcess.length}. Added to DB: ${addedCount}. Duplicates Skipped: ${duplicateCount}. Invalid Dates: ${parsingErrorsCount}. Invalid Winning #: ${invalidWinningNumbersCount}. DB Errors: ${firestoreErrorMessages.length}.`;
+        summary += ` Ajoutés DB: ${addedCount}. Doublons Ignorés: ${duplicateCount}. Erreurs DB: ${firestoreErrorMessages.length}.`;
         setProcessingSummary(summary);
 
         const firestoreErrorDetails = firestoreErrorMessages.join('; ');
         const permissionHint = firestoreErrorMessages.some(err => err.toLowerCase().includes("permission")) 
-          ? " This may be due to Firestore security rules. Please ensure the admin user has write permissions." 
+          ? " CRITIQUE : Ceci peut être dû à des règles de sécurité Firestore. Veuillez vous assurer que l'utilisateur admin a les permissions d'écriture et les revendications 'admin:true'." 
           : "";
 
         if (addedCount > 0 && firestoreErrorMessages.length === 0) {
             toast({
-                title: "Import Successful",
-                description: `${addedCount} new results for "${aiResult.drawName}" imported to Firestore. Full summary: ${summary}`,
-                className: "bg-green-600 text-white",
+                title: "Importation Réussie",
+                description: `${addedCount} nouveaux résultats pour "${aiResult.drawName}" importés dans Firestore. ${summary}`,
+                className: "bg-green-600/10 text-green-700 dark:text-green-300 border-green-600/30",
                 duration: 9000,
             });
         } else if (firestoreErrorMessages.length > 0) {
-             const toastDescription = `Some results for "${aiResult.drawName}" could not be saved. ${addedCount} added. ${firestoreErrorMessages.length} DB errors. Details: ${firestoreErrorDetails}.${permissionHint} Full summary: ${summary}`;
+             const toastDescription = `${addedCount} résultats ajoutés pour "${aiResult.drawName}". ${firestoreErrorMessages.length} erreurs DB. Détails: ${firestoreErrorDetails}.${permissionHint} ${summary}`;
+             setImportError(`Erreurs Firestore : ${firestoreErrorDetails}.${permissionHint}`);
              toast({
                 variant: "destructive",
-                title: "Import Partially Failed",
+                title: "Importation Partiellement Échouée",
                 description: toastDescription,
                 duration: 15000,
             });
-            setImportError(`Firestore errors occurred. ${firestoreErrorDetails}.${permissionHint}`);
-        } else if (resultsToProcess.length > 0) { 
+        } else if (resultsToProcess.length > 0) { // Processed, but nothing new added (e.g. all duplicates)
              toast({
-                title: "Import Processed - No New Data",
-                description: `No new results were added for "${aiResult.drawName}". This may be due to all entries being duplicates, or failing local validation. Full summary: ${summary}`,
-                className: "bg-yellow-500 text-black",
+                title: "Importation Traitée - Aucune Nouvelle Donnée",
+                description: `Aucun nouveau résultat n'a été ajouté pour "${aiResult.drawName}". Cela peut être dû au fait que toutes les entrées sont des doublons ou ont échoué à la validation locale. ${summary}`,
+                className: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30", // Using blue for informational
                 duration: 9000,
             });
-        } else { 
+        } else { // Should not be reached if earlier check for resultsToProcess.length === 0 is effective
              toast({
                 variant: "destructive",
-                title: "Import Failed - No Processable Data",
-                description: `No processable data was found in the AI output for "${aiResult.drawName}" after local validation. Full summary: ${summary}`,
+                title: "Importation Échouée - Aucune Donnée Traitable",
+                description: `Aucune donnée traitable n'a été trouvée dans la sortie IA pour "${aiResult.drawName}" après validation locale. ${summary}`,
                 duration: 9000,
             });
-            setImportError("No processable data from AI output after local validation.");
+            setImportError("Aucune donnée traitable de la sortie IA après validation locale.");
         }
 
       } else if (invalidWinningNumbersCount > 0 || parsingErrorsCount > 0) {
-         const summary = `Draw: ${aiResult.drawName}. AI Extracted: ${aiResult.results.length}. Processable: 0. Invalid Dates: ${parsingErrorsCount}. Invalid Winning #: ${invalidWinningNumbersCount}.`;
+         // This case means results were extracted by AI, but all failed local validation before Firestore attempt
          setProcessingSummary(summary);
          toast({
             variant: "destructive",
-            title: "Import Failed - Data Validation Errors",
-            description: `All ${aiResult.results.length} entries from AI had errors (winning numbers or dates) and were skipped. No data imported. ${summary}`,
+            title: "Importation Échouée - Erreurs de Validation des Données",
+            description: `Toutes les ${aiResult.results.length} entrées de l'IA avaient des erreurs (numéros gagnants ou dates) et ont été ignorées. Aucune donnée importée. ${summary}`,
             duration: 9000,
          });
-         setImportError("All entries from AI had processing errors (dates or winning numbers).");
-      } else {
-         const summary = `Draw: ${aiResult.drawName}. AI Extracted: ${aiResult.results.length}. No data to process.`;
+         setImportError("Toutes les entrées de l'IA avaient des erreurs de traitement (dates ou numéros gagnants).");
+      } else { // AI extracted data, but resultsToProcess ended up empty for other reasons (should be rare)
          setProcessingSummary(summary);
          toast({
-            title: "No Data to Import",
-            description: `No processable results found in the image for draw "${aiResult.drawName}". ${summary}`,
+            title: "Aucune Donnée à Importer",
+            description: `Aucun résultat traitable trouvé dans l'image pour le tirage "${aiResult.drawName}". ${summary}`,
             duration: 7000,
          });
       }
 
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during image import.";
+      const errorMessage = err instanceof Error ? err.message : "Une erreur inconnue est survenue lors de l'importation d'image.";
       const permissionHint = errorMessage.toLowerCase().includes("permission")
-        ? " This may be due to Firestore security rules. Please ensure the admin user has write permissions."
+        ? " CRITIQUE : Ceci peut être dû à des règles de sécurité Firestore. Veuillez vous assurer que l'utilisateur admin a les permissions d'écriture et les revendications 'admin:true'."
         : "";
       setImportError(`${errorMessage}${permissionHint}`);
-      toast({ variant: "destructive", title: "Critical Import Error", description: `${errorMessage}${permissionHint}`, duration: 9000 });
+      toast({ variant: "destructive", title: "Erreur Critique d'Importation", description: `${errorMessage}${permissionHint}`, duration: 12000 });
       console.error("Image import error:", err);
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) {
-        fileInputRef.current.value = "";
+        fileInputRef.current.value = ""; // Reset file input
       }
     }
   };
@@ -227,12 +249,12 @@ export function AdminImageImport() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Import Lottery Results from Image</CardTitle>
-        <CardDescription>Upload an image containing lottery results. The AI will attempt to extract the data, which will then be saved to Firestore.</CardDescription>
+        <CardTitle>Importer les Résultats de Loterie depuis une Image</CardTitle>
+        <CardDescription>Téléchargez une image contenant les résultats de loterie. L'IA tentera d'extraire les données, qui seront ensuite sauvegardées dans Firestore.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div>
-          <Label htmlFor="image-upload">Lottery Result Image</Label>
+          <Label htmlFor="image-upload">Image des Résultats de Loterie</Label>
           <Input
             id="image-upload"
             type="file"
@@ -246,48 +268,58 @@ export function AdminImageImport() {
 
         {imagePreview && (
           <div className="space-y-2">
-            <Label>Image Preview</Label>
+            <Label>Aperçu de l'Image</Label>
             <div className="border rounded-md p-2 flex justify-center bg-muted/30">
-              <Image src={imagePreview} alt="Selected lottery results" width={600} height={400} style={{ objectFit: 'contain', maxHeight: '400px' }} />
+              <Image src={imagePreview} alt="Résultats de loterie sélectionnés" width={600} height={400} style={{ objectFit: 'contain', maxHeight: '400px' }} />
             </div>
           </div>
         )}
 
         {importError && (
-          <div className="p-4 bg-destructive/10 text-destructive border border-destructive/30 rounded-md flex items-start">
-            <AlertTriangle className="h-5 w-5 mr-3 flex-shrink-0" />
-            <div>
-                <p className="font-semibold">Import Problem Occurred</p>
-                <p className="text-sm">{importError}</p>
-            </div>
-          </div>
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-5 w-5" />
+            <AlertTitle>Problème d'Importation Survenu</AlertTitle>
+            <AlertDescription>
+                {importError}
+                 {importError.toLowerCase().includes("permission") && (
+                <p className="text-sm mt-2 font-medium">
+                  ACTION REQUISE : Veuillez vérifier vos règles de sécurité Firestore dans la console Firebase.
+                  Les utilisateurs administrateurs ont besoin de la permission d'écriture sur la collection 'lotteryResults' et doivent avoir les revendications personnalisées 'admin:true'.
+                </p>
+              )}
+            </AlertDescription>
+          </Alert>
         )}
         
-        {processingSummary && ( 
-             <div className={`p-4 border rounded-md flex items-start ${
-                importError 
-                    ? "bg-destructive/10 text-destructive border-destructive/30" 
-                    : (processingSummary.includes("Added to DB: 0") && !processingSummary.includes("DB Errors: 0") && !processingSummary.includes("AI Extracted: 0")) 
-                        ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/30" 
-                        : "bg-green-600/10 text-green-700 dark:text-green-300 border-green-600/30"
-                }`}>
-                {importError ? <AlertTriangle className="h-5 w-5 mr-3 flex-shrink-0" /> : (processingSummary.includes("Added to DB: 0") && !processingSummary.includes("DB Errors: 0")  && !processingSummary.includes("AI Extracted: 0") ? <FileWarning className="h-5 w-5 mr-3 flex-shrink-0" /> : <CheckCircle2 className="h-5 w-5 mr-3 flex-shrink-0" />)}
-                <div>
-                    <p className="font-semibold">Processing Summary</p>
-                    <p className="text-sm whitespace-pre-line">{processingSummary}</p>
-                    {!importError && <p className="text-sm mt-1">Check toast notifications for detailed status.</p>}
-                </div>
-            </div>
+        {processingSummary && !importError && ( 
+             <Alert 
+                className={`mb-4 ${
+                    processingSummary.includes("Ajoutés DB: 0") && (processingSummary.includes("Erreurs DB:") && !processingSummary.includes("Erreurs DB: 0")) 
+                        ? "bg-destructive/10 text-destructive border-destructive/30" // Error if DB errors exist and 0 added
+                        : (processingSummary.includes("Ajoutés DB: 0") || processingSummary.includes("Traitables: 0") || processingSummary.includes("Aucune Donnée de Résultat Extraite"))
+                            ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/30" // Warning if 0 added or 0 processable
+                            : processingSummary.includes("Erreurs DB:") && !processingSummary.includes("Erreurs DB: 0")
+                                ? "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30" // Orange for partial success with DB errors
+                                : "bg-green-600/10 text-green-700 dark:text-green-300 border-green-600/30" // Success
+                }`}
+            >
+                {processingSummary.includes("Ajoutés DB: 0") && (processingSummary.includes("Erreurs DB:") && !processingSummary.includes("Erreurs DB: 0")) ? <AlertTriangle className="h-5 w-5" /> :
+                 (processingSummary.includes("Ajoutés DB: 0") || processingSummary.includes("Traitables: 0") || processingSummary.includes("Aucune Donnée de Résultat Extraite")) ? <FileWarning className="h-5 w-5" /> : 
+                 processingSummary.includes("Erreurs DB:") && !processingSummary.includes("Erreurs DB: 0") ? <Info className="h-5 w-5" /> : 
+                 <CheckCircle2 className="h-5 w-5" />}
+                <AlertTitle>Résumé du Traitement</AlertTitle>
+                <AlertDescription className="whitespace-pre-line">{processingSummary}</AlertDescription>
+                {!importError && <p className="text-sm mt-1">Vérifiez les notifications (toast) pour le statut détaillé.</p>}
+            </Alert>
         )}
 
 
         <Button onClick={handleImageImport} disabled={isImporting || !selectedImage} className="w-full sm:w-auto">
           {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-          {isImporting ? "Importing to Firestore..." : "Import Data from Image to Firestore"}
+          {isImporting ? "Importation vers Firestore..." : "Importer les Données de l'Image vers Firestore"}
         </Button>
 
       </CardContent>
     </Card>
   );
 }
-

@@ -2,8 +2,8 @@
 "use client";
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Ticket, Settings, PanelLeft, CalendarDays, Clock, Shield } from 'lucide-react'; // Added Shield
+import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
+import { Ticket, Settings, PanelLeft, CalendarDays, Clock, Shield, LogOut } from 'lucide-react'; // Added LogOut
 import {
   Sidebar,
   SidebarHeader,
@@ -20,16 +20,35 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { DRAW_SCHEDULE } from '@/services/lotteryApi';
 import { slugify } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext'; // Added useAuth
+import { useToast } from '@/hooks/use-toast'; // Added useToast
 
 const orderedDays = Object.keys(DRAW_SCHEDULE);
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter(); // Added router
   const { open, setOpen, isMobile, setOpenMobile } = useSidebar();
+  const { currentUser, logout } = useAuth(); // Added useAuth
+  const { toast } = useToast(); // Added useToast
 
   const handleLinkClick = () => {
     if (isMobile) {
       setOpenMobile(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
+      router.push('/login');
+      if (isMobile) {
+        setOpenMobile(false);
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+      toast({ variant: 'destructive', title: 'Logout Failed', description: 'Could not log out.' });
     }
   };
 
@@ -130,6 +149,18 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </Link>
           </SidebarMenuItem>
+          {currentUser && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={handleLogout}
+                tooltip={{ children: "Logout", className: "bg-card text-card-foreground border-border" }}
+                className="justify-start w-full"
+              >
+                <LogOut className="w-5 h-5" />
+                <span className={cn(!open && !isMobile && "sr-only")}>Logout</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
         {!isMobile && open && (
           <Button

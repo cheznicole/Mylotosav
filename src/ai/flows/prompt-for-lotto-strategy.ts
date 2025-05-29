@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Predicts lottery numbers based on a user-provided strategy.
@@ -13,6 +14,7 @@ import {z} from 'genkit';
 const PredictLottoNumbersWithStrategyInputSchema = z.object({
   strategyPrompt: z
     .string()
+    .min(10, "Strategy description is too short.") // Added min length for better prompting
     .describe('A description of the lottery strategy to use when predicting numbers.'),
 });
 export type PredictLottoNumbersWithStrategyInput =
@@ -24,7 +26,7 @@ const PredictLottoNumbersWithStrategyOutputSchema = z.object({
     .length(6)
     .describe('An array of 6 predicted lottery numbers based on the provided strategy.'),
   confidenceScores: z
-    .array(z.number())
+    .array(z.number().min(0).max(1)) // Ensure confidence scores are between 0 and 1
     .length(6)
     .describe('An array of confidence scores (0-1) for each predicted number.'),
 });
@@ -41,11 +43,11 @@ const prompt = ai.definePrompt({
   name: 'predictLottoNumbersWithStrategyPrompt',
   input: {schema: PredictLottoNumbersWithStrategyInputSchema},
   output: {schema: PredictLottoNumbersWithStrategyOutputSchema},
-  prompt: `You are an AI lottery number predictor.  Based on the strategy provided by the user, predict 6 lottery numbers, each between 1 and 49 (inclusive). Also, generate a confidence score between 0 and 1 for each predicted number.
+  prompt: `You are an AI lottery number predictor. Based on the strategy provided by the user, predict exactly 6 lottery numbers, each between 1 and 49 (inclusive). Also, generate a confidence score between 0 and 1 (inclusive) for each predicted number, where 1 is highest confidence.
 
   User Strategy: {{{strategyPrompt}}}
 
-  Respond ONLY with a JSON object that conforms to the schema.  Do not include any other text.  The \"predictedNumbers\" field should be an array of 6 integers, and the \"confidenceScores\" field should be an array of 6 floating point numbers between 0 and 1.
+  Respond ONLY with a JSON object that conforms to the output schema. Do not include any other text or explanations. The "predictedNumbers" field must be an array of 6 unique integers, and the "confidenceScores" field must be an array of 6 floating point numbers between 0 and 1.
 `,
 });
 
@@ -57,6 +59,15 @@ const predictLottoNumbersWithStrategyFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    if (!output) {
+      throw new Error("AI failed to generate a strategy-based prediction. The output was null or undefined.");
+    }
+    // Zod schema validation handles length and types.
+    // Could add an extra check for uniqueness of predictedNumbers if Zod doesn't cover it sufficiently.
+    const uniquePredictedNumbers = [...new Set(output.predictedNumbers)];
+    if (uniquePredictedNumbers.length !== 6) {
+        throw new Error("AI predicted non-unique numbers or an incorrect count for strategy-based prediction. Expected 6 unique numbers.");
+    }
+    return output;
   }
 );
