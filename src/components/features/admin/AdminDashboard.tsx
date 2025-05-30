@@ -7,7 +7,7 @@ import { AdminDataImportExport } from "./AdminDataImportExport";
 import { AdminImageImport } from "./AdminImageImport";
 import { AdminApiSync } from "./AdminApiSync"; // Import the new component
 import { DatabaseZap, FileJson, ImageUp, CloudDownload } from "lucide-react";
-
+// Minor change to attempt to resolve ChunkLoadError
 
 export function AdminDashboard() {
   return (

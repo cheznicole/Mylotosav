@@ -1,6 +1,7 @@
 
 import { AdminDashboard } from '@/components/features/admin/AdminDashboard';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+// Minor change to attempt to resolve ChunkLoadError
 
 export default function AdminPage() {
   return (
