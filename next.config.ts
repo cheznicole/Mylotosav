@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
     ],
   },
   // Adding a comment to try and trigger a rebuild and potentially resolve startup issues
+  // Adding another comment to ensure the file is marked as changed for a clean rebuild.
 };
 
 export default nextConfig;
