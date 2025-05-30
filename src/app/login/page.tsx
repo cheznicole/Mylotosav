@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, LogIn } from 'lucide-react';
 
+// LoginPage component for user authentication
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,15 +26,15 @@ export default function LoginPage() {
     if (message === 'unauthenticated') {
       toast({
         variant: 'destructive',
-        title: 'Authentication Required',
-        description: 'You must be logged in to access the admin panel.',
+        title: 'Authentification Requise',
+        description: "Vous devez être connecté pour accéder au panneau d'administration.",
         duration: 7000,
       });
     } else if (message === 'unauthorized') {
       toast({
         variant: 'destructive',
-        title: 'Access Denied',
-        description: 'You do not have administrative privileges to access the admin panel.',
+        title: 'Accès Refusé',
+        description: "Vous n'avez pas les privilèges administratifs pour accéder au panneau d'administration.",
         duration: 7000,
       });
     }
@@ -46,7 +47,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await login(email, password);
-      toast({ title: 'Login Successful', description: "Redirecting to admin..." });
+      toast({ title: 'Connexion Réussie', description: "Redirection vers l'admin..." });
       router.push('/admin');
     } catch (error) {
       // Error toast is handled by AuthProvider's login function
@@ -60,7 +61,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-bold text-primary">Mylotosav Admin</CardTitle>
-          <CardDescription>Please sign in to access the admin panel.</CardDescription>
+          <CardDescription>Veuillez vous connecter pour accéder au panneau d'administration.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -94,13 +95,13 @@ export default function LoginPage() {
               ) : (
                 <LogIn className="mr-2 h-4 w-4" />
               )}
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? 'Connexion...' : 'Se Connecter'}
             </Button>
           </form>
         </CardContent>
         <CardFooter>
             <p className="text-xs text-muted-foreground text-center w-full">
-                Ensure you have admin privileges.
+                Assurez-vous d'avoir les privilèges d'administrateur.
             </p>
         </CardFooter>
       </Card>
