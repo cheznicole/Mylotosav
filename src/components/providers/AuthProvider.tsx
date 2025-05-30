@@ -17,9 +17,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const { toast } = useToast();
 
+  // Add isActive guard for all state setters if operations could complete after unmount
+  // This is mostly covered by the useEffect cleanup, but good for direct async calls too.
+  let isActive = true;
+  useEffect(() => {
+    isActive = true; // Set to true when component mounts or dependencies change
+    return () => {
+      isActive = false; // Set to false when component unmounts or before dependencies change
+    };
+  }, []);
+
+
   useEffect(() => {
     console.log('[AuthProvider] useEffect triggered');
-    let isActive = true; // Flag to prevent state updates if component unmounts
     let loadingTimeout: NodeJS.Timeout;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -37,14 +47,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
               setIsAdmin(!!idTokenResult.claims.admin);
               console.log('[AuthProvider] isAdmin set to:', !!idTokenResult.claims.admin);
             }
-          } catch (tokenError) {
+          } catch (tokenError: any) {
             console.error("[AuthProvider] Error fetching ID token result:", tokenError);
-            toast({
-              variant: "destructive",
-              title: "Erreur d'Authentification",
-              description: "Impossible de vérifier le statut administrateur. Veuillez vérifier votre connexion ou vous reconnecter."
-            });
             if (isActive) {
+              toast({
+                variant: "destructive",
+                title: "Erreur d'Authentification",
+                description: `Impossible de vérifier le statut administrateur: ${tokenError.message || "Veuillez vérifier votre connexion ou vous reconnecter."}`
+              });
               setIsAdmin(false);
             }
           }
@@ -69,11 +79,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     });
 
+    // Safeguard timeout for initial loading
     loadingTimeout = setTimeout(() => {
-      if (isActive && loading) {
+      if (isActive && loading) { // Check loading state as well
         console.warn('[AuthProvider] Auth state resolution timed out. Forcing loading to false.');
-        setLoading(false);
-        if (!currentUser && isActive) { // Check isActive again before setting state
+        setLoading(false); // Ensure loading is set to false
+        if (!currentUser && isActive) { 
           setCurrentUser(null);
           setIsAdmin(false);
         }
@@ -81,12 +92,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }, 20000); // 20 seconds timeout
 
     return () => {
-      isActive = false;
+      if (isActive) { // Only try to cleanup if it was active
+         isActive = false; // Set to false on cleanup
+      }
       unsubscribe();
       if (loadingTimeout) clearTimeout(loadingTimeout);
       console.log('[AuthProvider] Unsubscribed from onAuthStateChanged.');
     };
-  }, [toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]); // currentUser should not be in deps, causes loops
 
   const login = async (email: string, pass: string) => {
     console.log('[AuthProvider] login called for email:', email);
@@ -98,16 +112,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error: any) {
       console.error("[AuthProvider] Login error:", error);
       if (error.code === 'auth/invalid-credential') {
+         console.error("[AuthProvider] Specific error: auth/invalid-credential. This means Firebase rejected the email/password. Please verify credentials and user account status in Firebase console.");
          toast({ variant: "destructive", title: "Identifiants Invalides", description: "L'email ou le mot de passe est incorrect. Veuillez réessayer."});
       } else {
         toast({ variant: "destructive", title: "Login Failed", description: error.message || "An unknown error occurred during login." });
       }
-      if (isActive) { // Ensure component is still mounted
+      if (isActive) { 
         setIsAdmin(false);
         setCurrentUser(null);
-        setLoading(false); // Explicitly set loading to false on login error
+        setLoading(false); 
       }
-      throw error; // Re-throw error so LoginPage can also catch it if needed
+      throw error; 
     }
   };
 
@@ -121,7 +136,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error) {
       console.error("[AuthProvider] Logout error:", error);
       toast({ variant: "destructive", title: "Logout Failed", description: "Could not log out." });
-      if (isActive) { // Ensure component is still mounted
+      if (isActive) { 
+        // Reset states on logout error as well, though onAuthStateChanged should handle it if signout eventually succeeds
         setIsAdmin(false);
         setCurrentUser(null);
         setLoading(false);
@@ -129,16 +145,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
   
-  // Add isActive guard for all state setters if operations could complete after unmount
-  // This is mostly covered by the useEffect cleanup, but good for direct async calls too.
-  let isActive = true;
-  useEffect(() => {
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-
   const value: AuthContextType = {
     currentUser,
     isAdmin,
