@@ -17,6 +17,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter();
   const [localRedirecting, setLocalRedirecting] = useState(false);
   const [showSlowLoadingMessage, setShowSlowLoadingMessage] = useState(false);
+  const [showNotAdminMessage, setShowNotAdminMessage] = useState(false); // New state
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -39,7 +40,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       });
     }
 
-    if (loading || localRedirecting) {
+    if (loading || localRedirecting || showNotAdminMessage) { // Prevent re-entry if already redirecting or showing message
       return;
     }
 
@@ -48,20 +49,51 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       setLocalRedirecting(true);
       router.replace('/login?message=unauthenticated');
     } else if (!isAdmin) {
-      console.log('[AdminLayout] User is not admin. Logging out and redirecting to login (unauthorized).');
-      setLocalRedirecting(true);
-      // If user is authenticated but not admin, log them out and redirect
-      // This prevents them from being stuck in a loop if they are logged in as non-admin
-      logout().finally(() => {
-         router.replace('/login?message=unauthorized');
-      });
+      console.log('[AdminLayout] User is authenticated but not admin. Displaying message, then logging out and redirecting.');
+      setShowNotAdminMessage(true); // Show the specific "Not Admin" message
+      // Delay the logout and redirect to allow the message to be seen
+      setTimeout(() => {
+        setLocalRedirecting(true); // Prevent further checks during this async operation
+        logout().finally(() => {
+           router.replace('/login?message=unauthorized');
+           // setShowNotAdminMessage(false); // Optionally hide message after redirect starts
+        });
+      }, 4000); // Display message for 4 seconds before redirecting
     } else {
       // User is authenticated and is an admin.
       console.log('[AdminLayout] User is authenticated admin. Access granted.');
+      setShowNotAdminMessage(false); // Ensure not admin message is hidden if access is granted
     }
 
-  }, [currentUser, isAdmin, loading, router, localRedirecting, logout]);
+  }, [currentUser, isAdmin, loading, router, localRedirecting, logout, showNotAdminMessage]);
 
+
+  if (showNotAdminMessage) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center bg-background">
+        <AlertTriangle className="h-16 w-16 text-destructive mb-6" />
+        <h1 className="text-3xl font-bold text-destructive mb-3">Accès Refusé</h1>
+        <p className="text-xl text-foreground mb-4">
+          Vous êtes bien connecté, mais votre compte ne dispose pas des droits d'administrateur.
+        </p>
+        <Alert variant="destructive" className="max-w-md text-left">
+            <AlertTriangle className="h-5 w-5" />
+            <AlertTitle>Privilèges Insuffisants</AlertTitle>
+            <AlertDescription>
+                Pour accéder au panneau d'administration, votre compte doit avoir la revendication personnalisée (custom claim) <code className="font-mono bg-muted px-1 py-0.5 rounded text-sm">admin:true</code> configurée dans Firebase Authentication.
+                <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+                    <li>Veuillez vérifier que cette revendication a été correctement appliquée à votre UID <code className="font-mono bg-muted px-1 py-0.5 rounded text-xs">{currentUser?.uid || 'N/A'}</code>.</li>
+                    <li>La revendication est sensible à la casse et doit être un booléen <code className="font-mono bg-muted px-1 py-0.5 rounded text-xs">true</code>.</li>
+                </ul>
+            </AlertDescription>
+        </Alert>
+        <p className="text-md text-muted-foreground mt-6">
+          Vous allez être déconnecté et redirigé vers la page de connexion...
+        </p>
+        <Loader2 className="h-8 w-8 animate-spin text-primary mt-8" />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -79,8 +111,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                     La vérification prend plus de temps que prévu. Veuillez vérifier :
                     <ul className="list-disc list-inside mt-2 space-y-1">
                         <li>Votre connexion internet.</li>
-                        <li>Que les revendications d'administrateur (custom claims `admin:true`) sont correctement configurées dans Firebase Authentication pour votre compte.</li>
-                        <li>La console de votre navigateur (F12) pour des erreurs spécifiques de Firebase ou de réseau.</li>
+                        <li>Que les revendications d'administrateur (custom claims <code className="font-mono bg-muted px-1 py-0.5 rounded text-xs">admin:true</code>) sont correctement configurées pour votre compte.</li>
+                        <li>La console de votre navigateur (F12) pour des erreurs Firebase ou réseau.</li>
                     </ul>
                     Si le problème persiste, contactez le support technique ou vérifiez l'état des services Firebase.
                 </AlertDescription>
@@ -90,8 +122,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     );
   }
 
-  if (!currentUser || !isAdmin) {
-    // This state should ideally be brief as the useEffect above handles redirection
+  if (!currentUser || !isAdmin) { // This will be briefly hit before showNotAdminMessage or redirect kicks in
     return (
          <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-6" />
