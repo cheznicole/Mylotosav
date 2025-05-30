@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState, useEffect } from 'react'; // Added useEffect
-import { useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,19 +27,11 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Authentification Requise',
-        description: "Vous devez être connecté pour accéder au panneau d'administration.",
-        duration: 7000,
-      });
-    } else if (message === 'unauthorized') {
-      toast({
-        variant: 'destructive',
-        title: 'Accès Refusé',
-        description: "Vous n'avez pas les privilèges administratifs pour accéder au panneau d'administration.",
+        description: "Vous devez être connecté pour accéder à cette page.",
         duration: 7000,
       });
     }
-    // It's generally okay to leave the query param in the URL for transparency,
-    // or you could router.replace('/login') to clear it, but that might cause a flicker.
+    // Removed 'unauthorized' message handling as AdminLayout no longer differentiates based on admin role for access.
   }, [searchParams, toast]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -48,20 +40,21 @@ export default function LoginPage() {
     try {
       await login(email, password);
       toast({ title: 'Connexion Réussie', description: "Redirection vers l'admin..." });
-      router.push('/admin');
+      router.push('/admin'); 
     } catch (error) {
       // Error toast is handled by AuthProvider's login function
+      // or by this component if the error is not Firebase related (though unlikely here)
       setIsLoading(false);
     }
-    // setIsLoading(false) is handled by success (navigation away) or specific catch block
+    // setIsLoading(false) is generally handled by success (navigation away) or specific catch block
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold text-primary">Mylotosav Admin</CardTitle>
-          <CardDescription>Veuillez vous connecter pour accéder au panneau d'administration.</CardDescription>
+          <CardTitle className="text-3xl font-bold text-primary">Mylotosav</CardTitle>
+          <CardDescription>Veuillez vous connecter pour accéder à l'application.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -70,7 +63,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@example.com"
+                placeholder="utilisateur@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -101,7 +94,7 @@ export default function LoginPage() {
         </CardContent>
         <CardFooter>
             <p className="text-xs text-muted-foreground text-center w-full">
-                Assurez-vous d'avoir les privilèges d'administrateur.
+                Connectez-vous pour gérer les données de loterie.
             </p>
         </CardFooter>
       </Card>
