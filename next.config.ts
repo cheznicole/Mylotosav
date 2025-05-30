@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Adding a comment to try and trigger a rebuild
+  // Adding a comment to try and trigger a rebuild and potentially resolve startup issues
 };
 
 export default nextConfig;
