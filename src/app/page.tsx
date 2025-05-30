@@ -1,6 +1,8 @@
+
 import { redirect } from 'next/navigation';
 import { getFirstDrawSlug } from '@/lib/utils';
 
+// General stability: Minor modification to ensure this page is re-evaluated.
 export default function HomePage() {
   const firstDrawSlug = getFirstDrawSlug();
   if (firstDrawSlug) {
@@ -12,3 +14,4 @@ export default function HomePage() {
   }
   return null;
 }
+

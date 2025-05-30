@@ -12,8 +12,9 @@ interface AdminLayoutProps {
   children: ReactNode;
 }
 
+// General stability: Minor modification to ensure this layout is re-evaluated.
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const { currentUser, loading } = useAuth(); // Removed isAdmin and logout from here as it's not used for gating
+  const { currentUser, loading } = useAuth(); // isAdmin check is removed for general access
   const router = useRouter();
   const [localRedirecting, setLocalRedirecting] = useState(false);
   const [showSlowLoadingMessage, setShowSlowLoadingMessage] = useState(false);
@@ -23,7 +24,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     if (loading) {
       timer = setTimeout(() => {
         setShowSlowLoadingMessage(true);
-      }, 7000); // Show message after 7 seconds of loading
+      }, 7000); 
     } else {
       setShowSlowLoadingMessage(false);
     }
@@ -32,7 +33,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   useEffect(() => {
     if (!loading) {
-      console.log('[AdminLayout] Auth State Resolved:', {
+      console.log('[AdminLayout] Auth State Resolved (General Access):', {
         currentUser: !!currentUser,
         localRedirecting,
       });
@@ -47,8 +48,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       setLocalRedirecting(true);
       router.replace('/login?message=unauthenticated');
     } else {
-      // User is authenticated. Access granted.
-      console.log('[AdminLayout] User is authenticated. Access granted.');
+      // User is authenticated. Access granted (no admin check needed here for layout access).
+      console.log('[AdminLayout] User is authenticated. Access granted to admin section.');
     }
 
   }, [currentUser, loading, router, localRedirecting]);
@@ -80,7 +81,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     );
   }
 
-  if (!currentUser && !loading) { // This will be briefly hit if not logged in, before redirect kicks in
+  if (!currentUser && !loading) { 
     return (
          <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-6" />
@@ -95,6 +96,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     );
   }
 
-  // If loading is false, and currentUser is true
+  // If loading is false, and currentUser is true, grant access.
   return <>{children}</>;
 }
+

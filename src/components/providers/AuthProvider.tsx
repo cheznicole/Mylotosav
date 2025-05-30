@@ -10,20 +10,18 @@ import { useToast } from '@/hooks/use-toast';
 interface AuthProviderProps {
   children: ReactNode;
 }
-
+// General stability: Minor modification to ensure this provider is re-evaluated.
 export function AuthProvider({ children }: AuthProviderProps) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const { toast } = useToast();
 
-  // Add isActive guard for all state setters if operations could complete after unmount
-  // This is mostly covered by the useEffect cleanup, but good for direct async calls too.
   let isActive = true;
   useEffect(() => {
-    isActive = true; // Set to true when component mounts or dependencies change
+    isActive = true; 
     return () => {
-      isActive = false; // Set to false when component unmounts or before dependencies change
+      isActive = false; 
     };
   }, []);
 
@@ -79,28 +77,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     });
 
-    // Safeguard timeout for initial loading
     loadingTimeout = setTimeout(() => {
-      if (isActive && loading) { // Check loading state as well
+      if (isActive && loading) { 
         console.warn('[AuthProvider] Auth state resolution timed out. Forcing loading to false.');
-        setLoading(false); // Ensure loading is set to false
+        setLoading(false); 
         if (!currentUser && isActive) { 
           setCurrentUser(null);
           setIsAdmin(false);
         }
       }
-    }, 20000); // 20 seconds timeout
+    }, 20000); 
 
     return () => {
-      if (isActive) { // Only try to cleanup if it was active
-         isActive = false; // Set to false on cleanup
+      if (isActive) { 
+         isActive = false; 
       }
       unsubscribe();
       if (loadingTimeout) clearTimeout(loadingTimeout);
       console.log('[AuthProvider] Unsubscribed from onAuthStateChanged.');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]); // currentUser should not be in deps, causes loops
+  }, [toast]); 
 
   const login = async (email: string, pass: string) => {
     console.log('[AuthProvider] login called for email:', email);
@@ -108,7 +105,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       await signInWithEmailAndPassword(auth, email, pass);
       console.log('[AuthProvider] signInWithEmailAndPassword successful. onAuthStateChanged will handle the rest.');
-      // onAuthStateChanged will handle setting user, admin status, and then setLoading(false)
     } catch (error: any) {
       console.error("[AuthProvider] Login error:", error);
       if (error.code === 'auth/invalid-credential') {
@@ -132,12 +128,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       await firebaseSignOut(auth);
       console.log('[AuthProvider] firebaseSignOut successful. onAuthStateChanged will handle reset.');
-      // onAuthStateChanged will handle resetting user, admin status, and then setLoading(false)
     } catch (error) {
       console.error("[AuthProvider] Logout error:", error);
       toast({ variant: "destructive", title: "Logout Failed", description: "Could not log out." });
       if (isActive) { 
-        // Reset states on logout error as well, though onAuthStateChanged should handle it if signout eventually succeeds
         setIsAdmin(false);
         setCurrentUser(null);
         setLoading(false);
@@ -155,3 +149,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+

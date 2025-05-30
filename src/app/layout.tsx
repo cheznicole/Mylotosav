@@ -6,8 +6,9 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { Toaster } from '@/components/ui/toaster';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { AuthProvider } from '@/components/providers/AuthProvider'; // Added AuthProvider
+import { AuthProvider } from '@/components/providers/AuthProvider'; 
 
+// General stability: Minor modification to ensure this layout is re-evaluated.
 export const metadata: Metadata = {
   title: 'Mylotosav',
   description: 'Analyse avancée des résultats de loterie et prédictions intelligentes.',
@@ -21,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <body className={`${GeistSans.variable} antialiased`}>
-        <AuthProvider> {/* Wrapped with AuthProvider */}
+        <AuthProvider> 
           <SidebarProvider defaultOpen={true}>
             <AppSidebar />
             <SidebarInset className="flex flex-col min-h-screen">
@@ -40,3 +41,4 @@ export default function RootLayout({
     </html>
   );
 }
+
