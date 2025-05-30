@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { UploadCloud, Loader2, AlertTriangle, CheckCircle2, FileWarning, Info } from "lucide-react"; // Added Info
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; // Added Alert components
+import { Alert, AlertTitle, AlertDescription as UiAlertDescription } from "@/components/ui/alert"; // Renamed AlertDescription
 import { extractLotteryDataFromImage, type ExtractLotteryDataOutput } from "@/ai/flows/extract-lottery-data-from-image";
 import type { DrawResult } from "@/services/lotteryApi";
 import { addMultipleDrawResults } from "@/services/lotteryApi";
@@ -62,7 +62,7 @@ export function AdminImageImport() {
   const [isImporting, setIsImporting] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [extractedData, setExtractedData] = useState<ExtractLotteryDataOutput | null>(null); // Kept for potential debugging, not directly shown
+  const [extractedData, setExtractedData] = useState<ExtractLotteryDataOutput | null>(null); 
   const [importError, setImportError] = useState<string | null>(null); 
   const [processingSummary, setProcessingSummary] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -100,7 +100,7 @@ export function AdminImageImport() {
     try {
       toast({title: "Traitement IA en cours...", description: "Extraction des données de l'image."});
       aiResult = await extractLotteryDataFromImage({ imageDataUri: imagePreview });
-      setExtractedData(aiResult); // Store AI result for potential debugging
+      setExtractedData(aiResult); 
 
       if (!aiResult || !aiResult.drawName || !aiResult.results ) {
         throw new Error("L'IA n'a pas retourné un nom de tirage valide ou des résultats.");
@@ -146,7 +146,7 @@ export function AdminImageImport() {
           draw_name: aiResult.drawName,
           date: parsedDateStr,
           gagnants: validWinningNumbers,
-          machine: validMachineNumbers.length > 0 ? validMachineNumbers : undefined, // Ensure undefined if empty for Firestore
+          machine: validMachineNumbers.length > 0 ? validMachineNumbers : undefined, 
         });
       }
       
@@ -174,8 +174,8 @@ export function AdminImageImport() {
         setProcessingSummary(summary);
 
         const firestoreErrorDetails = firestoreErrorMessages.join('; ');
-        const permissionHint = firestoreErrorMessages.some(err => err.toLowerCase().includes("permission")) 
-          ? " CRITIQUE : Ceci peut être dû à des règles de sécurité Firestore. Veuillez vous assurer que l'utilisateur admin a les permissions d'écriture et les revendications 'admin:true'." 
+        const permissionHint = firestoreErrorMessages.some(err => err.toLowerCase().includes("permission") || err.toLowerCase().includes("missing or insufficient permissions")) 
+          ? " CRITIQUE : Ceci peut être dû à des règles de sécurité Firestore. Si vous souhaitez que tous les utilisateurs connectés puissent utiliser cette fonctionnalité, assurez-vous que vos règles Firestore autorisent l'écriture dans la collection 'lotteryResults' pour tout utilisateur authentifié (par exemple, `allow write: if request.auth != null;`). Si seuls des administrateurs spécifiques (avec une revendication 'admin:true') doivent avoir ce droit, alors l'utilisateur actuel doit avoir cette revendication et les règles Firestore doivent la vérifier (`request.auth.token.admin == true`)."
           : "";
 
         if (addedCount > 0 && firestoreErrorMessages.length === 0) {
@@ -194,14 +194,14 @@ export function AdminImageImport() {
                 description: toastDescription,
                 duration: 15000,
             });
-        } else if (resultsToProcess.length > 0) { // Processed, but nothing new added (e.g. all duplicates)
+        } else if (resultsToProcess.length > 0) { 
              toast({
                 title: "Importation Traitée - Aucune Nouvelle Donnée",
                 description: `Aucun nouveau résultat n'a été ajouté pour "${aiResult.drawName}". Cela peut être dû au fait que toutes les entrées sont des doublons ou ont échoué à la validation locale. ${summary}`,
-                className: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30", // Using blue for informational
+                className: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30",
                 duration: 9000,
             });
-        } else { // Should not be reached if earlier check for resultsToProcess.length === 0 is effective
+        } else { 
              toast({
                 variant: "destructive",
                 title: "Importation Échouée - Aucune Donnée Traitable",
@@ -212,7 +212,6 @@ export function AdminImageImport() {
         }
 
       } else if (invalidWinningNumbersCount > 0 || parsingErrorsCount > 0) {
-         // This case means results were extracted by AI, but all failed local validation before Firestore attempt
          setProcessingSummary(summary);
          toast({
             variant: "destructive",
@@ -221,7 +220,7 @@ export function AdminImageImport() {
             duration: 9000,
          });
          setImportError("Toutes les entrées de l'IA avaient des erreurs de traitement (dates ou numéros gagnants).");
-      } else { // AI extracted data, but resultsToProcess ended up empty for other reasons (should be rare)
+      } else { 
          setProcessingSummary(summary);
          toast({
             title: "Aucune Donnée à Importer",
@@ -232,8 +231,8 @@ export function AdminImageImport() {
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Une erreur inconnue est survenue lors de l'importation d'image.";
-      const permissionHint = errorMessage.toLowerCase().includes("permission")
-        ? " CRITIQUE : Ceci peut être dû à des règles de sécurité Firestore. Veuillez vous assurer que l'utilisateur admin a les permissions d'écriture et les revendications 'admin:true'."
+      const permissionHint = (errorMessage.toLowerCase().includes("permission") || errorMessage.toLowerCase().includes("missing or insufficient permissions"))
+        ? " CRITIQUE : Ceci peut être dû à des règles de sécurité Firestore. Si vous souhaitez que tous les utilisateurs connectés puissent utiliser cette fonctionnalité, assurez-vous que vos règles Firestore autorisent l'écriture dans la collection 'lotteryResults' pour tout utilisateur authentifié (par exemple, `allow write: if request.auth != null;`). Si seuls des administrateurs spécifiques (avec une revendication 'admin:true') doivent avoir ce droit, alors l'utilisateur actuel doit avoir cette revendication et les règles Firestore doivent la vérifier (`request.auth.token.admin == true`)."
         : "";
       setImportError(`${errorMessage}${permissionHint}`);
       toast({ variant: "destructive", title: "Erreur Critique d'Importation", description: `${errorMessage}${permissionHint}`, duration: 12000 });
@@ -241,7 +240,7 @@ export function AdminImageImport() {
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) {
-        fileInputRef.current.value = ""; // Reset file input
+        fileInputRef.current.value = ""; 
       }
     }
   };
@@ -279,15 +278,15 @@ export function AdminImageImport() {
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-5 w-5" />
             <AlertTitle>Problème d'Importation Survenu</AlertTitle>
-            <AlertDescription>
+            <UiAlertDescription>
                 {importError}
-                 {importError.toLowerCase().includes("permission") && (
+                 {(importError.toLowerCase().includes("permission") || importError.toLowerCase().includes("missing or insufficient permissions")) && (
                 <p className="text-sm mt-2 font-medium">
                   ACTION REQUISE : Veuillez vérifier vos règles de sécurité Firestore dans la console Firebase.
-                  Les utilisateurs administrateurs ont besoin de la permission d'écriture sur la collection 'lotteryResults' et doivent avoir les revendications personnalisées 'admin:true'.
+                   Si tous les utilisateurs connectés doivent pouvoir importer, la règle pour 'lotteryResults' pourrait être `allow write: if request.auth != null;`.
                 </p>
               )}
-            </AlertDescription>
+            </UiAlertDescription>
           </Alert>
         )}
         
@@ -295,12 +294,12 @@ export function AdminImageImport() {
              <Alert 
                 className={`mb-4 ${
                     processingSummary.includes("Ajoutés DB: 0") && (processingSummary.includes("Erreurs DB:") && !processingSummary.includes("Erreurs DB: 0")) 
-                        ? "bg-destructive/10 text-destructive border-destructive/30" // Error if DB errors exist and 0 added
+                        ? "bg-destructive/10 text-destructive border-destructive/30" 
                         : (processingSummary.includes("Ajoutés DB: 0") || processingSummary.includes("Traitables: 0") || processingSummary.includes("Aucune Donnée de Résultat Extraite"))
-                            ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/30" // Warning if 0 added or 0 processable
+                            ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/30" 
                             : processingSummary.includes("Erreurs DB:") && !processingSummary.includes("Erreurs DB: 0")
-                                ? "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30" // Orange for partial success with DB errors
-                                : "bg-green-600/10 text-green-700 dark:text-green-300 border-green-600/30" // Success
+                                ? "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30" 
+                                : "bg-green-600/10 text-green-700 dark:text-green-300 border-green-600/30" 
                 }`}
             >
                 {processingSummary.includes("Ajoutés DB: 0") && (processingSummary.includes("Erreurs DB:") && !processingSummary.includes("Erreurs DB: 0")) ? <AlertTriangle className="h-5 w-5" /> :
@@ -308,7 +307,7 @@ export function AdminImageImport() {
                  processingSummary.includes("Erreurs DB:") && !processingSummary.includes("Erreurs DB: 0") ? <Info className="h-5 w-5" /> : 
                  <CheckCircle2 className="h-5 w-5" />}
                 <AlertTitle>Résumé du Traitement</AlertTitle>
-                <AlertDescription className="whitespace-pre-line">{processingSummary}</AlertDescription>
+                <UiAlertDescription className="whitespace-pre-line">{processingSummary}</UiAlertDescription>
                 {!importError && <p className="text-sm mt-1">Vérifiez les notifications (toast) pour le statut détaillé.</p>}
             </Alert>
         )}

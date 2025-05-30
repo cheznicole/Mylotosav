@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { scrapeAndParseLotteryResultsFromAPI, addMultipleDrawResults } from "@/services/lotteryApi"; // type DrawResult removed as not used here
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CloudDownload, Loader2, AlertTriangle, CheckCircle2, Info } from "lucide-react"; // Added CheckCircle2, Info
+import { Alert, AlertTitle, AlertDescription as UiAlertDescription } from "@/components/ui/alert"; // Renamed AlertDescription to avoid conflict
 
 export function AdminApiSync() {
   const { toast } = useToast();
@@ -43,17 +44,16 @@ export function AdminApiSync() {
       summaryMessage += `${added.length} nouveaux résultats ajoutés à Firestore. `;
       summaryMessage += `${duplicates} doublons ignorés. `;
       
-      const hasPermissionError = firestoreErrors.some(err => err.toLowerCase().includes("permission"));
+      const hasPermissionError = firestoreErrors.some(err => err.toLowerCase().includes("permission") || err.toLowerCase().includes("missing or insufficient permissions"));
 
       if (firestoreErrors.length > 0) {
         const firestoreErrorDetails = firestoreErrors.join("; ");
         let permissionHint = "";
         if (hasPermissionError) {
-            permissionHint = " CRITIQUE : Ceci est probablement dû à des règles de sécurité Firestore refusant l'accès en écriture. Veuillez vous assurer que vos règles autorisent les utilisateurs administrateurs à écrire dans la collection 'lotteryResults' et que l'utilisateur connecté possède les revendications personnalisées d'administrateur (admin:true).";
+            permissionHint = " CRITIQUE : Ceci est probablement dû à des règles de sécurité Firestore. Si vous souhaitez que tous les utilisateurs connectés puissent utiliser cette fonctionnalité, assurez-vous que vos règles Firestore autorisent l'écriture dans la collection 'lotteryResults' pour tout utilisateur authentifié (par exemple, `allow write: if request.auth != null;`). Si seuls des administrateurs spécifiques (avec une revendication 'admin:true') doivent avoir ce droit, alors l'utilisateur actuel doit avoir cette revendication et les règles Firestore doivent la vérifier (`request.auth.token.admin == true`).";
         }
         summaryMessage += `${firestoreErrors.length} erreurs de sauvegarde Firestore se sont produites.${permissionHint}`;
         setSyncError(`Erreurs de sauvegarde Firestore : ${firestoreErrorDetails}.${permissionHint}`);
-        setSyncSummary(summaryMessage);
          toast({
             variant: "destructive",
             title: "Synchronisation API - Succès Partiel avec Erreurs",
@@ -85,7 +85,7 @@ export function AdminApiSync() {
           className: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/30",
           duration: 7000,
         });
-      } else { // Catch-all for cases like 0 fetched, 0 added, 0 duplicates after all other specific conditions
+      } else { 
          setSyncSummary(summaryMessage);
          toast({
             title: "Synchronisation API - Traitée",
@@ -96,10 +96,10 @@ export function AdminApiSync() {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue lors de la synchronisation API.";
-      const isPermissionError = errorMessage.toLowerCase().includes("permission");
+      const isPermissionError = errorMessage.toLowerCase().includes("permission") || errorMessage.toLowerCase().includes("missing or insufficient permissions");
       let permissionHint = "";
       if (isPermissionError) {
-          permissionHint = " CRITIQUE : Ceci pourrait être dû à des règles de sécurité Firestore refusant l'accès en écriture. Veuillez vous assurer que vos règles autorisent les utilisateurs administrateurs à écrire dans la collection 'lotteryResults' et que l'utilisateur connecté possède les revendications personnalisées d'administrateur (admin:true).";
+          permissionHint = " CRITIQUE : Ceci pourrait être dû à des règles de sécurité Firestore. Si vous souhaitez que tous les utilisateurs connectés puissent utiliser cette fonctionnalité, assurez-vous que vos règles Firestore autorisent l'écriture dans la collection 'lotteryResults' pour tout utilisateur authentifié (par exemple, `allow write: if request.auth != null;`). Si seuls des administrateurs spécifiques (avec une revendication 'admin:true') doivent avoir ce droit, alors l'utilisateur actuel doit avoir cette revendication et les règles Firestore doivent la vérifier (`request.auth.token.admin == true`).";
       }
       setSyncError(`${errorMessage}${permissionHint}`);
       setSyncSummary(`Erreur critique pendant la synchronisation : ${errorMessage}`);
@@ -124,15 +124,15 @@ export function AdminApiSync() {
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-5 w-5" />
             <AlertTitle>Problème de Synchronisation Survenu</AlertTitle>
-            <AlertDescription>
+            <UiAlertDescription>
               {syncError}
-              {syncError.toLowerCase().includes("permission") && (
+              {(syncError.toLowerCase().includes("permission") || syncError.toLowerCase().includes("missing or insufficient permissions")) && (
                 <p className="text-sm mt-2 font-medium">
                   ACTION REQUISE : Veuillez vérifier vos règles de sécurité Firestore dans la console Firebase.
-                  Les utilisateurs administrateurs ont besoin de la permission d'écriture sur la collection 'lotteryResults' et doivent avoir les revendications personnalisées 'admin:true'.
+                  Si tous les utilisateurs connectés doivent pouvoir synchroniser, la règle pour 'lotteryResults' pourrait être `allow write: if request.auth != null;`.
                 </p>
               )}
-            </AlertDescription>
+            </UiAlertDescription>
           </Alert>
         )}
         {syncSummary && !syncError && (
@@ -145,7 +145,7 @@ export function AdminApiSync() {
             >
                 {syncSummary.includes("nouveaux résultats ajoutés") ? <CheckCircle2 className="h-5 w-5" /> : <Info className="h-5 w-5" />}
                 <AlertTitle>Résumé de la Synchronisation</AlertTitle>
-                <AlertDescription>{syncSummary}</AlertDescription>
+                <UiAlertDescription>{syncSummary}</UiAlertDescription>
             </Alert>
         )}
         <Button onClick={handleApiSync} disabled={isSyncing} className="w-full sm:w-auto">
