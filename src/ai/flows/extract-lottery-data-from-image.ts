@@ -69,6 +69,8 @@ const extractLotteryDataFromImageFlow = ai.defineFlow(
     outputSchema: ExtractLotteryDataOutputSchema,
   },
   async input => {
+    // Note: If a 503 Service Unavailable error occurs here, it's an external API issue (model overloaded).
+    // The application should catch this error in the calling component and inform the user to try again later.
     const {output} = await extractPrompt(input);
     if (!output) {
         throw new Error("AI failed to extract data from the image. The output was null or undefined.");
@@ -81,13 +83,10 @@ const extractLotteryDataFromImageFlow = ai.defineFlow(
         // It's possible an image has a draw name but no result rows, this might not always be an error.
         // However, for typical use, we expect some results.
         console.warn("AI output returned no result rows. DrawName:", output.drawName);
-        // Depending on strictness, could throw an error here. For now, allow it but log.
     }
     output.results.forEach((result, index) => {
         if(!result.winningNumbers || result.winningNumbers.length !== 5) {
             console.warn(`Potentially incomplete winningNumbers for result at index ${index} from AI:`, result.winningNumbers);
-            // Consider how to handle this, e.g., filter out this specific result or throw.
-            // For now, relies on frontend validation in AdminImageImport.tsx
         }
         if(!result.machineNumbers || result.machineNumbers.length !== 5) {
              console.warn(`Potentially incomplete machineNumbers for result at index ${index} from AI:`, result.machineNumbers);
@@ -96,3 +95,4 @@ const extractLotteryDataFromImageFlow = ai.defineFlow(
     return output;
   }
 );
+
