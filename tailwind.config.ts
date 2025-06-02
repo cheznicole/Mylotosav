@@ -7,6 +7,23 @@ export default {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  safelist: [
+    'bg-white',
+    'text-gray-800',
+    'bg-blue-700',
+    'text-white',
+    'bg-orange-500',
+    // text-white is common, but explicitly listing relevant background ensures its text pair is considered.
+    'bg-green-600',
+    'bg-yellow-500',
+    // text-gray-800 for yellow
+    'bg-pink-500',
+    'bg-indigo-600',
+    'bg-amber-700',
+    'bg-red-600',
+    'bg-gray-200',
+    // text-gray-800 for gray-200
+  ],
   theme: {
   	extend: {
       fontFamily: {
