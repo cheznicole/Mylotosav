@@ -2,17 +2,18 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import type { DrawResult as ApiDrawResult } from '@/services/lotteryApi'; // Use type from actual API
-import { fetchLotteryResults } from '@/services/lotteryApi'; // Fetch from actual API
+import type { DrawResult as ApiDrawResult } from '@/services/lotteryApi';
+import { fetchLotteryResults } from '@/services/lotteryApi';
 import LotteryNumberDisplay from '@/components/features/lottery/LotteryNumberDisplay';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal } from "lucide-react";
+import { Terminal, CalendarDays } from "lucide-react";
+import { parseISO, format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 5; // Adjusted for card layout
 
 interface ResultsDisplayProps {
   drawName: string;
@@ -30,10 +31,7 @@ export default function ResultsDisplay({ drawName }: ResultsDisplayProps) {
       try {
         setLoading(true);
         setError(null);
-        // Fetch all results for the default period (e.g., current month or all available)
-        // The API might need a way to fetch all, or we fetch month by month.
-        // For now, assuming fetchLotteryResults() gets a reasonable default set.
-        const data = await fetchLotteryResults(); // Consider passing a date range or month if API supports
+        const data = await fetchLotteryResults();
         setAllResults(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch lottery results.');
@@ -47,9 +45,11 @@ export default function ResultsDisplay({ drawName }: ResultsDisplayProps) {
 
   useEffect(() => {
     if (drawName && allResults.length > 0) {
-      const relevantResults = allResults.filter(result => result.draw_name === drawName);
+      const relevantResults = allResults
+        .filter(result => result.draw_name === drawName)
+        .sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime()); // Sort by date descending
       setFilteredResults(relevantResults);
-      setCurrentPage(1); // Reset to first page when drawName or allResults change
+      setCurrentPage(1);
     } else {
       setFilteredResults([]);
     }
@@ -61,9 +61,19 @@ export default function ResultsDisplay({ drawName }: ResultsDisplayProps) {
     currentPage * ITEMS_PER_PAGE
   );
 
+  const formatDate = (dateString: string): string => {
+    try {
+      const date = parseISO(dateString);
+      return format(date, 'EEEE d MMMM yyyy', { locale: fr });
+    } catch (e) {
+      console.error("Error formatting date:", dateString, e);
+      return dateString; // fallback to original string
+    }
+  };
+
   if (error) {
     return (
-      <Card>
+      <Card className="shadow-lg">
         <CardHeader>
             <CardTitle className="text-xl font-semibold text-primary">Résultats des Tirages</CardTitle>
             <CardDescription>Affichage des résultats pour {drawName}.</CardDescription>
@@ -89,51 +99,62 @@ export default function ResultsDisplay({ drawName }: ResultsDisplayProps) {
         {loading ? (
           <div className="space-y-4">
             {[...Array(ITEMS_PER_PAGE)].map((_, i) => (
-              <Skeleton key={i} className="h-20 w-full rounded-md" />
+              <Card key={`skeleton-${i}`} className="p-4">
+                <Skeleton className="h-6 w-1/2 mb-4" />
+                <Skeleton className="h-4 w-1/3 mb-2" />
+                <div className="flex gap-2 mb-4">
+                  {[...Array(5)].map((_, j) => <Skeleton key={j} className="h-10 w-10 rounded-full" />)}
+                </div>
+                <Skeleton className="h-4 w-1/3 mb-2" />
+                <div className="flex gap-2">
+                  {[...Array(5)].map((_, j) => <Skeleton key={j} className="h-10 w-10 rounded-full" />)}
+                </div>
+              </Card>
             ))}
           </div>
         ) : paginatedResults.length === 0 ? (
             <Alert>
                 <Terminal className="h-4 w-4" />
                 <AlertTitle>Aucun Résultat</AlertTitle>
-                <AlertDescription>Aucun résultat trouvé pour {drawName} pour la période sélectionnée.</AlertDescription>
+                <AlertDescription>Aucun résultat trouvé pour {drawName}.</AlertDescription>
             </Alert>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Numéros Gagnants</TableHead>
-                <TableHead>Numéros Machine</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedResults.map((result, index) => ( 
-                <TableRow key={`${result.id}-${index}`}>
-                  <TableCell>{new Date(result.date).toLocaleDateString()}</TableCell>
-                  <TableCell>
+          <div className="space-y-4">
+            {paginatedResults.map((result) => ( 
+              <Card key={result.id} className="overflow-hidden">
+                <CardHeader className="bg-muted/30 p-4">
+                  <CardTitle className="text-base font-medium flex items-center">
+                    <CalendarDays className="w-4 h-4 mr-2 text-primary" />
+                    {formatDate(result.date)}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-2">Numéros Gagnants</h4>
                     <div className="flex flex-wrap gap-2">
                       {result.gagnants.map((num, numIndex) => (
-                        <LotteryNumberDisplay key={`gagnant-${result.id}-${num}-${numIndex}`} number={num} size="sm" />
+                        <LotteryNumberDisplay key={`gagnant-${result.id}-${num}-${numIndex}`} number={num} size="md" />
                       ))}
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-2">
-                      {result.machine && result.machine.map((num, numIndex) => (
-                        <LotteryNumberDisplay key={`machine-${result.id}-${num}-${numIndex}`} number={num} size="sm" className="opacity-75" />
-                      ))}
-                      {!result.machine && <span className="text-xs text-muted-foreground">N/A</span>}
+                  </div>
+                  {result.machine && result.machine.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-muted-foreground mb-2">Numéros Machine</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {result.machine.map((num, numIndex) => (
+                          <LotteryNumberDisplay key={`machine-${result.id}-${num}-${numIndex}`} number={num} size="md" className="opacity-90" />
+                        ))}
+                      </div>
                     </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         )}
       </CardContent>
       {!loading && filteredResults.length > 0 && totalPages > 1 && (
-        <CardFooter className="flex justify-between items-center pt-4">
+        <CardFooter className="flex justify-between items-center pt-6 border-t mt-4">
           <Button
             onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
             disabled={currentPage === 1}
