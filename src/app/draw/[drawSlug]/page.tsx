@@ -12,7 +12,7 @@ import { AlertTriangle, BarChart3, Cpu, FileText, Network, Lightbulb } from 'luc
 // Dynamically import feature components
 import dynamic from 'next/dynamic';
 
-// Minor change to attempt to resolve ChunkLoadError
+// Attempt to resolve ChunkLoadError by ensuring this file is re-processed.
 const ResultsDisplay = dynamic(() => import('@/components/features/results/ResultsDisplay'), {
   loading: () => <Skeleton className="h-[300px] w-full" />,
 });
