@@ -376,10 +376,16 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
             <p className="text-sm text-muted-foreground">Aucune donnée de prédiction à afficher.</p>
             {isModelPrediction && (prediction as AIPrediction).analysis && (
             <div>
-              <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Explication IA:</h4>
+              <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Explication IA (Modèle):</h4>
               <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md whitespace-pre-line">{(prediction as AIPrediction).analysis}</p>
             </div>
-          )}
+            )}
+            {!isModelPrediction && (prediction as StrategyPrediction).explanation && (
+            <div>
+              <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Explication IA (Stratégie):</h4>
+              <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md whitespace-pre-line">{(prediction as StrategyPrediction).explanation}</p>
+            </div>
+            )}
           </CardContent>
         </Card>
       );
@@ -411,8 +417,14 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
           </div>
           {isModelPrediction && (prediction as AIPrediction).analysis && (
             <div>
-              <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Explication IA:</h4>
+              <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Explication IA (Modèle):</h4>
               <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md whitespace-pre-line">{(prediction as AIPrediction).analysis}</p>
+            </div>
+          )}
+          {!isModelPrediction && (prediction as StrategyPrediction).explanation && (
+            <div>
+              <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Explication IA (Stratégie):</h4>
+              <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md whitespace-pre-line">{(prediction as StrategyPrediction).explanation}</p>
             </div>
           )}
         </CardContent>

@@ -26,6 +26,7 @@ export interface AIPrediction {
 export interface StrategyPrediction {
   predictedNumbers: number[];
   confidenceScores: number[];
+  explanation?: string; // Added from prompt-for-lotto-strategy flow
 }
 
 // Added from the new lotteryApi.ts

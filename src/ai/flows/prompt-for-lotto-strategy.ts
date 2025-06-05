@@ -29,6 +29,10 @@ const PredictLottoNumbersWithStrategyOutputSchema = z.object({
     .array(z.number().min(0).max(1)) // Ensure confidence scores are between 0 and 1
     .length(6)
     .describe('An array of confidence scores (0-1) for each predicted number.'),
+  explanation: z
+    .string()
+    .optional()
+    .describe('A brief explanation of how the AI applied the user\'s strategy to generate the numbers.'),
 });
 export type PredictLottoNumbersWithStrategyOutput =
   z.infer<typeof PredictLottoNumbersWithStrategyOutputSchema>;
@@ -45,9 +49,12 @@ const prompt = ai.definePrompt({
   output: {schema: PredictLottoNumbersWithStrategyOutputSchema},
   prompt: `You are an AI lottery number predictor. Based on the strategy provided by the user, predict exactly 6 lottery numbers, each between 1 and 49 (inclusive). Also, generate a confidence score between 0 and 1 (inclusive) for each predicted number, where 1 is highest confidence.
 
-  User Strategy: {{{strategyPrompt}}}
+User Strategy: {{{strategyPrompt}}}
 
-  Respond ONLY with a JSON object that conforms to the output schema. Do not include any other text or explanations. The "predictedNumbers" field must be an array of 6 unique integers, and the "confidenceScores" field must be an array of 6 floating point numbers between 0 and 1.
+Respond with a JSON object that conforms to the output schema.
+The "predictedNumbers" field must be an array of 6 unique integers.
+The "confidenceScores" field must be an array of 6 floating point numbers between 0 and 1.
+The "explanation" field should briefly (1-2 sentences) describe how you interpreted and applied the user's strategy to arrive at the predicted numbers.
 `,
 });
 
