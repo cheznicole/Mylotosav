@@ -12,7 +12,7 @@ import { AlertTriangle, BarChart3, Cpu, FileText, Network, Lightbulb } from 'luc
 // Dynamically import feature components
 import dynamic from 'next/dynamic';
 
-// Attempt to resolve ChunkLoadError by ensuring this file is re-processed.
+// Attempt to resolve ChunkLoadError by ensuring this file is re-processed. (Targeting ResultsDisplay)
 const ResultsDisplay = dynamic(() => import('@/components/features/results/ResultsDisplay'), {
   loading: () => <Skeleton className="h-[300px] w-full" />,
 });
@@ -22,6 +22,7 @@ const CooccurrenceMatrix = dynamic(() => import('@/components/features/cooccurre
 const StatisticalAnalysis = dynamic(() => import('@/components/features/statistics/StatisticalAnalysis'), {
   loading: () => <Skeleton className="h-[400px] w-full" />,
 });
+// Attempt to resolve ChunkLoadError by ensuring PredictionEngine is re-evaluated.
 const PredictionEngine = dynamic(() => import('@/components/features/predict/PredictionEngine'), {
   loading: () => <Skeleton className="h-[400px] w-full" />,
 });
