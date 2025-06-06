@@ -28,11 +28,11 @@ const PredictLottoNumbersWithStrategyOutputSchema = z.object({
   confidenceScores: z
     .array(z.number().min(0).max(1)) // Ensure confidence scores are between 0 and 1
     .length(6)
-    .describe('An array of confidence scores (0-1) for each predicted number.'),
+    .describe('An array of confidence scores (0-1) for each predicted number, reflecting how well it fits the strategy.'),
   explanation: z
     .string()
     .optional()
-    .describe('A brief explanation of how the AI applied the user\'s strategy to generate the numbers.'),
+    .describe('A brief explanation (1-2 sentences) of how the AI interpreted and applied the user\'s strategy to generate the numbers and their confidence scores.'),
 });
 export type PredictLottoNumbersWithStrategyOutput =
   z.infer<typeof PredictLottoNumbersWithStrategyOutputSchema>;
@@ -47,14 +47,20 @@ const prompt = ai.definePrompt({
   name: 'predictLottoNumbersWithStrategyPrompt',
   input: {schema: PredictLottoNumbersWithStrategyInputSchema},
   output: {schema: PredictLottoNumbersWithStrategyOutputSchema},
-  prompt: `You are an AI lottery number predictor. Based on the strategy provided by the user, predict exactly 6 lottery numbers, each between 1 and 49 (inclusive). Also, generate a confidence score between 0 and 1 (inclusive) for each predicted number, where 1 is highest confidence.
+  prompt: `You are an AI lottery number predictor. Based on the strategy provided by the user, predict exactly 6 lottery numbers, each between 1 and 49 (inclusive). Also, generate a confidence score between 0 and 1 (inclusive) for each predicted number.
 
 User Strategy: {{{strategyPrompt}}}
+
+Your tasks:
+1.  **Interpret the Strategy**: Understand the core logic and constraints of the user's strategy.
+2.  **Predict Numbers**: Generate 6 unique numbers that strictly follow the user's strategy.
+3.  **Assign Confidence Scores**: For each predicted number, assign a confidence score (0-1). This score should represent how strongly that specific number aligns with the given strategy. A higher score means a better fit according to your interpretation of the strategy.
+4.  **Provide Explanation**: Briefly explain (1-2 sentences) how you applied the user's strategy to arrive at the predicted numbers and their confidence scores. Link your choices directly to the provided strategy.
 
 Respond with a JSON object that conforms to the output schema.
 The "predictedNumbers" field must be an array of 6 unique integers.
 The "confidenceScores" field must be an array of 6 floating point numbers between 0 and 1.
-The "explanation" field should briefly (1-2 sentences) describe how you interpreted and applied the user's strategy to arrive at the predicted numbers.
+The "explanation" field must clearly and concisely describe your application of the strategy.
 `,
 });
 
@@ -70,10 +76,13 @@ const predictLottoNumbersWithStrategyFlow = ai.defineFlow(
       throw new Error("AI failed to generate a strategy-based prediction. The output was null or undefined.");
     }
     // Zod schema validation handles length and types.
-    // Could add an extra check for uniqueness of predictedNumbers if Zod doesn't cover it sufficiently.
     const uniquePredictedNumbers = [...new Set(output.predictedNumbers)];
     if (uniquePredictedNumbers.length !== 6) {
         throw new Error("AI predicted non-unique numbers or an incorrect count for strategy-based prediction. Expected 6 unique numbers.");
+    }
+    if (!output.explanation || output.explanation.trim() === "") {
+        console.warn("AI returned an empty or missing explanation for strategy-based prediction.");
+        // Allow it to pass, but ideally, the AI should always provide one.
     }
     return output;
   }

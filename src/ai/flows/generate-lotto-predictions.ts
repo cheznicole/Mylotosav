@@ -52,10 +52,21 @@ Données des résultats passés:
 {{{pastResults}}}
 
 Votre tâche est la suivante:
-1.  Analysez en profondeur les données historiques fournies. Considérez explicitement les tendances à court terme (ex: les 5-10 derniers tirages) et les tendances à long terme. Recherchez des fréquences de numéros (numéros chauds/froids), des séquences, des écarts temporels entre les apparitions de numéros, et tout autre motif pertinent. Soyez conscient que la qualité et la représentativité des données fournies peuvent influencer l'analyse.
-2.  Prédisez exactement 5 numéros UNIQUES pour le prochain tirage du Loto Bonheur. Assurez-vous que ces numéros sont compris entre 1 et 90.
-3.  Pour chacun des 5 numéros prédits, fournissez un score de confiance individuel (une valeur numérique entre 0.0 et 1.0), où 1.0 représente la confiance la plus élevée. Votre score de confiance doit refléter la probabilité estimée que ce numéro spécifique soit tiré, basée sur votre analyse.
-4.  Rédigez une analyse détaillée et perspicace en langage naturel (champ 'analysis'). Expliquez votre raisonnement pour la sélection de ces numéros. Identifiez spécifiquement 2-3 facteurs ou motifs clés qui ont le plus influencé votre prédiction. Par exemple, si un numéro est prédit, mentionnez s'il est actuellement sur une tendance chaude à court terme, s'il est historiquement sous-représenté sur le long terme, ou s'il apparaît fréquemment avec d'autres numéros prédits. Indiquez si votre stratégie tente d'équilibrer des numéros très fréquents avec des numéros plus rares, et pourquoi. Votre analyse doit être convaincante et aider l'utilisateur à comprendre la logique derrière la prédiction. Évitez les déclarations vagues ; soyez précis.
+1.  **Analyse Approfondie des Données Historiques**:
+    *   Utilisez les données historiques pour effectuer une analyse statistique. Identifiez les fréquences de chaque numéro (numéros chauds/froids), les écarts (depuis combien de tirages un numéro n'est pas sorti), et les séquences ou motifs récurrents.
+    *   Considérez explicitement les tendances à court terme (ex: les 5-10 derniers tirages) et les tendances à long terme.
+    *   Recherchez des corrélations non linéaires ou des motifs complexes que de simples statistiques pourraient manquer.
+2.  **Prédiction de 5 Numéros Uniques**:
+    *   Prédisez exactement 5 numéros UNIQUES pour le prochain tirage du Loto Bonheur. Assurez-vous que ces numéros sont compris entre 1 et 90.
+3.  **Scores de Confiance Significatifs**:
+    *   Pour chacun des 5 numéros prédits, fournissez un score de confiance individuel (valeur numérique entre 0.0 et 1.0).
+    *   Ce score doit refléter la probabilité estimée que ce numéro spécifique soit tiré, basée sur la convergence de votre analyse (par exemple, si un numéro est à la fois fréquent à long terme et a un écart récent important, sa confiance pourrait être plus élevée).
+4.  **Analyse Détaillée et Interprétable**:
+    *   Rédigez une analyse détaillée (champ 'analysis') expliquant *comment* votre analyse des données historiques (fréquences, écarts, tendances, motifs) a conduit à la sélection de *ces numéros spécifiques*.
+    *   Ne vous contentez pas de lister des observations ; expliquez le raisonnement liant l'analyse aux numéros prédits. Par exemple : "Le numéro X a été choisi car il est historiquement fréquent (apparu Y fois) et n'est pas sorti depuis Z tirages, indiquant un potentiel retour. De plus, il apparaît souvent en conjonction avec le numéro A, également prédit."
+    *   Identifiez 2-3 facteurs ou motifs clés qui ont le plus influencé votre prédiction.
+    *   Indiquez si votre stratégie tente d'équilibrer des numéros très fréquents avec des numéros plus rares, et pourquoi.
+    *   Soyez conscient que la qualité et la représentativité des données fournies influencent l'analyse.
 
 Assurez-vous que votre sortie est un objet JSON valide respectant le schéma de sortie. Les 5 numéros prédits doivent être dans le champ 'predictedNumbers' et les 5 scores de confiance correspondants dans 'confidenceScores'.
 `,
