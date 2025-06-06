@@ -79,6 +79,8 @@ const generateLottoPredictionsFlow = ai.defineFlow(
     outputSchema: GenerateLottoPredictionsOutputSchema,
   },
   async input => {
+    // Note: If a 503 Service Unavailable error occurs here, it's an external API issue (model overloaded).
+    // The application should catch this error in the calling component and inform the user to try again later.
     const {output} = await generateLottoPredictionsPrompt(input);
     if (!output) {
         throw new Error("AI failed to generate predictions. The output was null or undefined.");
