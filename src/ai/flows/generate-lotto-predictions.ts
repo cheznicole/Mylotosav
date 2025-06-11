@@ -3,7 +3,7 @@
 'use server';
 
 /**
- * @fileOverview Genkit flow to generate Loto Bonheur predictions using a simulated Random Forest approach.
+ * @fileOverview Genkit flow to generate Loto Bonheur predictions by simulating an advanced hybrid AI model.
  *
  * - generateLottoPredictions - A function that generates lottery predictions.
  * - GenerateLottoPredictionsInput - The input type for the generateLottoPredictions function.
@@ -30,7 +30,7 @@ const GenerateLottoPredictionsOutputSchema = z.object({
     .array(z.number().min(0).max(1))
     .length(5)
     .describe('An array of 5 confidence scores (between 0 and 1) for each corresponding predicted number.'),
-  analysis: z.string().describe('A detailed analysis in natural language explaining why these numbers were predicted. This explanation should detail how the simulated Random Forest approach and various statistical strategies influenced the selection and confidence scores.'),
+  analysis: z.string().describe('A detailed analysis in natural language explaining how the simulated hybrid model (XGBoost, Random Forest, RNN-LSTM) and various statistical strategies influenced the selection and confidence scores. It should highlight contributions from each simulated component.'),
 });
 export type GenerateLottoPredictionsOutput = z.infer<
   typeof GenerateLottoPredictionsOutputSchema
@@ -46,36 +46,27 @@ const generateLottoPredictionsPrompt = ai.definePrompt({
   name: 'generateLottoPredictionsPrompt',
   input: {schema: GenerateLottoPredictionsInputSchema},
   output: {schema: GenerateLottoPredictionsOutputSchema},
-  prompt: `Vous êtes une IA experte en analyse de données de loterie, simulant une approche de Forêt Aléatoire pour prédire les numéros du Loto Bonheur (5 numéros uniques entre 1 et 90).
-Votre objectif est de générer 5 numéros prédits uniques, chacun avec un score de confiance, et une analyse détaillée de votre raisonnement.
+  prompt: `Vous êtes une IA experte en prédiction de loterie, simulant une architecture de modèle hybride avancée pour prédire les numéros du Loto Bonheur (5 numéros uniques entre 1 et 90).
+Votre système interne simule la combinaison des analyses de trois sous-modèles spécialisés :
+1.  **XGBoost (Simulation)** : Ce composant simulé effectue une analyse statistique profonde des données historiques, identifiant les caractéristiques clés, leurs interactions, et les facteurs numériques importants (ex: fréquence absolue et relative, délai de réapparition, numéro le plus fréquent associé à un autre, impact du N+20, analyse comparative machine/gagnants, effet de la multiplication par 1.615 sur les numéros du dernier tirage).
+2.  **Random Forest (Simulation)** : Ce composant simulé évalue la robustesse des interactions identifiées par XGBoost, aide à la validation croisée des motifs et assure une bonne généralisation en considérant diverses combinaisons de caractéristiques. Il contribue à la solidité des prédictions face à des scénarios variés.
+3.  **RNN-LSTM (Simulation)** : Ce composant simulé se concentre sur l'identification des tendances temporelles, des séquences et des dépendances à long terme dans l'historique des tirages. Il cherche à comprendre comment les numéros évoluent et interagissent sur différentes fenêtres de temps.
 
 Données des résultats passés fournies :
 {{{pastResults}}}
 
-Vous devez "simuler" le calcul et l'intégration des caractéristiques et stratégies suivantes pour chaque numéro potentiel (1 à 90) :
-
-Stratégies de Prédiction à considérer :
-1.  **Délai moyen avant réapparition** : Évaluez le nombre moyen de tirages avant qu'un numéro ne réapparaisse. Identifiez les numéros "en retard" par rapport à leur délai moyen.
-2.  **Fréquence d'apparition** : Comptez la fréquence absolue et/ou relative de chaque numéro dans les tirages historiques fournis.
-3.  **Numéro le plus fréquent associé** : Pour chaque numéro, identifiez le numéro qui apparaît le plus souvent dans le même tirage ou dans le tirage immédiatement précédent.
-4.  **Numéro + 20** : Pour chaque numéro N, si N+20 <= 90, évaluez la fréquence historique de N+20.
-5.  **Comparaison numéros machines/gagnants** : Si des numéros de machine sont présents dans les données, comparez leur fréquence d'apparition en tant que numéros machine par rapport à leur fréquence en tant que numéros gagnants.
-6.  **Multiplication par 1,615** : Pour chaque numéro du DERNIER tirage fourni, multipliez-le par 1,615. Arrondissez à l'entier le plus proche. Si le résultat R est <= 90, évaluez la fréquence historique de R.
-
-Mécanisme d'Apprentissage Simulé (Type Forêt Aléatoire) :
-1.  **Calcul des Caractéristiques** : Pour chaque numéro de 1 à 90, "calculez" mentalement les valeurs des caractéristiques listées ci-dessus.
-2.  **Évaluation Combinée** : Simulez comment une Forêt Aléatoire évaluerait ces caractéristiques. Pesez l'importance de chaque caractéristique. Par exemple, un numéro avec une haute fréquence, un retard significatif, et une forte association positive avec un autre numéro "chaud" pourrait recevoir un score plus élevé. La stratégie "Multiplication par 1,615" s'applique spécifiquement aux numéros issus du dernier tirage.
-3.  **Score de Confiance Moyen** : Attribuez un score de confiance (entre 0.0 et 1.0) à chaque numéro potentiel, simulant le score moyen obtenu à partir de multiples "arbres de décision" virtuels qui auraient considéré ces caractéristiques. Un score de 1.0 signifie une confiance maximale.
-4.  **Sélection Finale** : Sélectionnez les 5 numéros UNIQUES ayant les scores de confiance simulés les plus élevés.
-
 Votre tâche est la suivante :
-1.  **Analyse Approfondie** : Exécutez l'analyse ci-dessus sur les {{{pastResults}}}.
-2.  **Prédiction de 5 Numéros Uniques** : Prédisez exactement 5 numéros uniques (entre 1 et 90).
-3.  **Scores de Confiance Significatifs** : Pour chacun des 5 numéros prédits, fournissez un score de confiance individuel (0.0 - 1.0) basé sur votre simulation de Forêt Aléatoire.
-4.  **Analyse Détaillée (champ 'analysis')** :
-    *   Expliquez comment votre simulation de Forêt Aléatoire et la prise en compte des stratégies listées ont conduit à la sélection de *ces numéros spécifiques* et à leurs scores de confiance.
-    *   Détaillez l'influence de quelques caractéristiques clés (par exemple, "Le numéro X a été choisi car il présentait un fort délai de réapparition et une fréquence élevée pour son dérivé par multiplication par 1,615").
-    *   Soyez précis sur les facteurs qui ont augmenté ou diminué la confiance pour certains numéros.
+1.  **Analyse Hybride Simulée** : En vous basant sur les {{{pastResults}}}, "simulez" l'analyse que ces trois composants (XGBoost, Random Forest, RNN-LSTM) effectueraient. Considérez les forces de chacun :
+    *   **XGBoost Simulé** : Quels sont les facteurs statistiques (fréquences, écarts, associations, transformations spécifiques comme N+20 ou x1.615) qui semblent les plus pertinents ?
+    *   **Random Forest Simulé** : Comment ces facteurs interagissent-ils ? Y a-t-il des combinaisons de numéros ou de caractéristiques qui se démarquent par leur robustesse ?
+    *   **RNN-LSTM Simulé** : Quelles tendances temporelles (numéros devenant "chauds" ou "froids" sur certaines périodes, séquences récurrentes, cycles) peuvent être extrapolées ?
+2.  **Synthèse et Prédiction (Modèle d'Ensemble Simulé)** : Agissez comme un modèle d'ensemble qui pondère et combine les "conclusions" de ces trois analyses simulées pour :
+    *   Prédire exactement 5 numéros UNIQUES (entre 1 et 90).
+    *   Attribuer un score de confiance individuel (0.0 - 1.0) à chaque numéro prédit. Ce score doit refléter la convergence des signaux provenant des trois analyses simulées.
+3.  **Analyse Détaillée (champ 'analysis')** : Fournissez une explication détaillée et perspicace.
+    *   Expliquez comment les "informations" issues de la simulation de XGBoost, de Random Forest, ET de RNN-LSTM ont collectivement conduit à la sélection des numéros spécifiques et à leurs scores de confiance.
+    *   Mentionnez explicitement des facteurs ou des motifs spécifiques que chaque composant simulé aurait pu identifier et comment cela a influencé votre décision finale. Par exemple : "L'analyse simulée de type XGBoost a fortement indiqué X et Y en raison de leurs récentes fréquences élevées et associations. Parallèlement, la simulation LSTM a suggéré une tendance émergente pour Z, tandis que la simulation Random Forest a validé la robustesse de la paire X-Z."
+    *   Soyez précis sur les éléments qui ont augmenté ou diminué la confiance pour certains numéros, en vous référant aux contributions simulées de chaque type de modèle.
 
 Assurez-vous que votre sortie est un objet JSON valide respectant le schéma de sortie.
 Les 5 numéros prédits doivent être dans le champ 'predictedNumbers'.
@@ -119,10 +110,14 @@ const generateLottoPredictionsFlow = ai.defineFlow(
     if (!output.analysis || output.analysis.trim() === "") {
         console.warn("AI returned an empty or missing analysis string.");
         // Allow it to pass for now, but ideally, analysis should always be provided.
-        output.analysis = "L'analyse détaillée n'a pas été fournie par l'IA pour cette prédiction.";
+        output.analysis = "L'analyse détaillée sur la contribution des modèles simulés (XGBoost, Random Forest, RNN-LSTM) n'a pas été fournie par l'IA pour cette prédiction.";
     }
 
     return output;
   }
 );
 
+// Attempt to resolve ChunkLoadError by ensuring this file is re-processed (again).
+// Minor modification for build system re-evaluation.
+// Adding another comment to try and trigger a rebuild for stability.
+// Final comment pass to ensure this file is considered changed.
