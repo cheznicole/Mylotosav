@@ -48,24 +48,24 @@ const generateLottoPredictionsPrompt = ai.definePrompt({
   output: {schema: GenerateLottoPredictionsOutputSchema},
   prompt: `Vous êtes une IA experte en prédiction de loterie, simulant une architecture de modèle hybride avancée pour prédire les numéros du Loto Bonheur (5 numéros uniques entre 1 et 90).
 Votre système interne simule la combinaison des analyses de trois sous-modèles spécialisés :
-1.  **XGBoost (Simulation)** : Ce composant simulé effectue une analyse statistique profonde des données historiques, identifiant les caractéristiques clés, leurs interactions, et les facteurs numériques importants (ex: fréquence absolue et relative, délai de réapparition, numéro le plus fréquent associé à un autre, impact du N+20, analyse comparative machine/gagnants, effet de la multiplication par 1.615 sur les numéros du dernier tirage).
-2.  **Random Forest (Simulation)** : Ce composant simulé évalue la robustesse des interactions identifiées par XGBoost, aide à la validation croisée des motifs et assure une bonne généralisation en considérant diverses combinaisons de caractéristiques. Il contribue à la solidité des prédictions face à des scénarios variés.
-3.  **RNN-LSTM (Simulation)** : Ce composant simulé se concentre sur l'identification des tendances temporelles, des séquences et des dépendances à long terme dans l'historique des tirages. Il cherche à comprendre comment les numéros évoluent et interagissent sur différentes fenêtres de temps.
+1.  **XGBoost (Simulation)** : Ce composant simulé effectue une analyse statistique profonde des données historiques, identifiant les caractéristiques clés, leurs interactions, et les facteurs numériques importants (ex: fréquence absolue et relative, délai de réapparition, numéro le plus fréquent associé à un autre, impact du N+20, analyse comparative machine/gagnants, effet de la multiplication par 1.615 sur les numéros du dernier tirage). Il évalue la pertinence des facteurs et des motifs.
+2.  **Random Forest (Simulation)** : Ce composant simulé évalue la robustesse des interactions identifiées par XGBoost et d'autres signaux. Il aide à la validation croisée des motifs et assure une bonne généralisation en considérant diverses combinaisons de caractéristiques. Il contribue à la solidité des prédictions face à des scénarios variés et à l'équilibre entre numéros fréquents et rares.
+3.  **RNN-LSTM (Simulation)** : Ce composant simulé se concentre sur l'identification des tendances temporelles (court et long terme), des séquences et des dépendances à long terme dans l'historique des tirages. Il cherche à comprendre comment les numéros évoluent et interagissent sur différentes fenêtres de temps.
 
 Données des résultats passés fournies :
 {{{pastResults}}}
 
 Votre tâche est la suivante :
 1.  **Analyse Hybride Simulée** : En vous basant sur les {{{pastResults}}}, "simulez" l'analyse que ces trois composants (XGBoost, Random Forest, RNN-LSTM) effectueraient. Considérez les forces de chacun :
-    *   **XGBoost Simulé** : Quels sont les facteurs statistiques (fréquences, écarts, associations, transformations spécifiques comme N+20 ou x1.615) qui semblent les plus pertinents ?
-    *   **Random Forest Simulé** : Comment ces facteurs interagissent-ils ? Y a-t-il des combinaisons de numéros ou de caractéristiques qui se démarquent par leur robustesse ?
-    *   **RNN-LSTM Simulé** : Quelles tendances temporelles (numéros devenant "chauds" ou "froids" sur certaines périodes, séquences récurrentes, cycles) peuvent être extrapolées ?
+    *   **XGBoost Simulé** : Quels sont les facteurs statistiques (fréquences, écarts, associations, transformations spécifiques comme N+20 ou x1.615, motifs non linéaires) qui semblent les plus pertinents ?
+    *   **Random Forest Simulé** : Comment ces facteurs interagissent-ils ? Y a-t-il des combinaisons de numéros ou de caractéristiques qui se démarquent par leur robustesse et leur capacité à généraliser (par exemple, éviter le sur-ajustement sur les numéros les plus récents) ?
+    *   **RNN-LSTM Simulé** : Quelles tendances temporelles (numéros devenant "chauds" ou "froids" sur certaines périodes, séquences récurrentes, cycles) peuvent être extrapolées ? Comment les données les plus récentes influencent-elles ces tendances par rapport à l'historique plus ancien ?
 2.  **Synthèse et Prédiction (Modèle d'Ensemble Simulé)** : Agissez comme un modèle d'ensemble qui pondère et combine les "conclusions" de ces trois analyses simulées pour :
     *   Prédire exactement 5 numéros UNIQUES (entre 1 et 90).
-    *   Attribuer un score de confiance individuel (0.0 - 1.0) à chaque numéro prédit. Ce score doit refléter la convergence des signaux provenant des trois analyses simulées.
-3.  **Analyse Détaillée (champ 'analysis')** : Fournissez une explication détaillée et perspicace.
+    *   Attribuer un score de confiance individuel (0.0 - 1.0) à chaque numéro prédit. Ce score doit refléter la convergence et la force des signaux provenant des trois analyses simulées. Une confiance élevée indique une forte concordance entre les analyses simulées.
+3.  **Analyse Détaillée (champ 'analysis')** : Fournissez une explication détaillée et perspicace (minimum 3-4 phrases).
     *   Expliquez comment les "informations" issues de la simulation de XGBoost, de Random Forest, ET de RNN-LSTM ont collectivement conduit à la sélection des numéros spécifiques et à leurs scores de confiance.
-    *   Mentionnez explicitement des facteurs ou des motifs spécifiques que chaque composant simulé aurait pu identifier et comment cela a influencé votre décision finale. Par exemple : "L'analyse simulée de type XGBoost a fortement indiqué X et Y en raison de leurs récentes fréquences élevées et associations. Parallèlement, la simulation LSTM a suggéré une tendance émergente pour Z, tandis que la simulation Random Forest a validé la robustesse de la paire X-Z."
+    *   Identifiez 2-3 facteurs ou motifs clés (par exemple, "forte récurrence identifiée par XGBoost, confirmée par la robustesse de Random Forest, et alignée avec une tendance haussière de LSTM") qui ont été déterminants.
     *   Soyez précis sur les éléments qui ont augmenté ou diminué la confiance pour certains numéros, en vous référant aux contributions simulées de chaque type de modèle.
 
 Assurez-vous que votre sortie est un objet JSON valide respectant le schéma de sortie.
@@ -100,24 +100,27 @@ const generateLottoPredictionsFlow = ai.defineFlow(
     const uniquePredictedNumbers = [...new Set(output.predictedNumbers)];
     if (uniquePredictedNumbers.length !== 5) {
         console.warn(`AI predicted non-unique numbers. Original: ${output.predictedNumbers.join(',')}, Unique: ${uniquePredictedNumbers.join(',')}`);
-        throw new Error("AI predicted non-unique numbers. Expected 5 unique numbers.");
+        // Attempt to recover if possible by taking the first 5 unique, but this indicates an issue with the prompt or model.
+        if (uniquePredictedNumbers.length > 5) {
+            output.predictedNumbers = uniquePredictedNumbers.slice(0, 5);
+        } else {
+            throw new Error("AI predicted non-unique numbers and not enough unique numbers to form a set of 5. Expected 5 unique numbers.");
+        }
+    } else {
+        output.predictedNumbers = uniquePredictedNumbers; // Ensure it's the unique set
     }
+
     // Validate number range
     if (!output.predictedNumbers.every(num => num >= 1 && num <= 90)) {
         console.warn(`AI predicted numbers out of range (1-90). Output:`, output.predictedNumbers);
         throw new Error("AI predicted numbers out of the valid range (1-90).");
     }
-    if (!output.analysis || output.analysis.trim() === "") {
-        console.warn("AI returned an empty or missing analysis string.");
-        // Allow it to pass for now, but ideally, analysis should always be provided.
-        output.analysis = "L'analyse détaillée sur la contribution des modèles simulés (XGBoost, Random Forest, RNN-LSTM) n'a pas été fournie par l'IA pour cette prédiction.";
+    if (!output.analysis || output.analysis.trim() === "" || output.analysis.length < 20) { // Added length check
+        console.warn("AI returned an empty, missing, or very short analysis string. Output:", output.analysis);
+        output.analysis = "L'analyse détaillée sur la contribution des modèles simulés (XGBoost, Random Forest, RNN-LSTM) n'a pas été fournie ou était insuffisante par l'IA pour cette prédiction.";
     }
 
     return output;
   }
 );
-
-// Attempt to resolve ChunkLoadError by ensuring this file is re-processed (again).
 // Minor modification for build system re-evaluation.
-// Adding another comment to try and trigger a rebuild for stability.
-// Final comment pass to ensure this file is considered changed.
