@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
-import { Ticket, Settings, PanelLeft, CalendarDays, Clock, Shield, LogOut } from 'lucide-react'; // Added LogOut
+import { Ticket, Settings, PanelLeft, CalendarDays, Clock, Shield, LogOut, DownloadCloud } from 'lucide-react'; // Added LogOut and DownloadCloud
 import {
   Sidebar,
   SidebarHeader,
@@ -22,6 +22,7 @@ import { DRAW_SCHEDULE } from '@/services/lotteryApi';
 import { slugify } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext'; // Added useAuth
 import { useToast } from '@/hooks/use-toast'; // Added useToast
+import { InstallPwaButton } from '@/components/features/pwa/InstallPwaButton'; // Added PWA install button
 
 const orderedDays = Object.keys(DRAW_SCHEDULE);
 
@@ -41,14 +42,14 @@ export function AppSidebar() {
   const handleLogout = async () => {
     try {
       await logout();
-      toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
+      toast({ title: 'Déconnexion Réussie', description: 'Vous avez été déconnecté avec succès.' });
       router.push('/login');
       if (isMobile) {
         setOpenMobile(false);
       }
     } catch (error) {
       console.error("Logout error:", error);
-      toast({ variant: 'destructive', title: 'Logout Failed', description: 'Could not log out.' });
+      toast({ variant: 'destructive', title: 'Échec de la Déconnexion', description: 'Impossible de se déconnecter.' });
     }
   };
 
@@ -118,6 +119,9 @@ export function AppSidebar() {
       <SidebarFooter className="p-2 mt-auto">
         <SidebarMenu>
           <SidebarMenuItem>
+             <InstallPwaButton open={open || isMobile} className="h-auto px-2 py-1.5" />
+          </SidebarMenuItem>
+          <SidebarMenuItem>
             <Link href="/admin" passHref legacyBehavior>
               <SidebarMenuButton
                 asChild
@@ -153,11 +157,11 @@ export function AppSidebar() {
             <SidebarMenuItem>
               <SidebarMenuButton
                 onClick={handleLogout}
-                tooltip={{ children: "Logout", className: "bg-card text-card-foreground border-border" }}
+                tooltip={{ children: "Déconnexion", className: "bg-card text-card-foreground border-border" }}
                 className="justify-start w-full"
               >
                 <LogOut className="w-5 h-5" />
-                <span className={cn(!open && !isMobile && "sr-only")}>Logout</span>
+                <span className={cn(!open && !isMobile && "sr-only")}>Déconnexion</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}
