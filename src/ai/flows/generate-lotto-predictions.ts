@@ -31,7 +31,7 @@ const GenerateLottoPredictionsOutputSchema = z.object({
     .array(z.number().min(0).max(1))
     .length(5)
     .describe('An array of 5 confidence scores (between 0 and 1) for each corresponding predicted number.'),
-  analysis: z.string().describe('Une analyse détaillée en FRANÇAIS expliquant comment l\'IA est parvenue aux numéros prédits et à leurs scores de confiance, en se basant sur une simulation d\'analyse hybride (XGBoost, Random Forest, RNN-LSTM) des {{{pastResults}}}. L\'analyse doit mettre en évidence les tendances, motifs, ou particularités statistiques observées qui justifient la prédiction, en référençant explicitement comment chaque "modèle simulé" a contribué.'),
+  analysis: z.string().describe('Une analyse détaillée en FRANÇAIS expliquant comment l\'IA est parvenue aux numéros prédits et à leurs scores de confiance, en se basant sur une simulation d\'analyse hybride (XGBoost, Random Forest, RNN-LSTM) des {{{pastResults}}}. L\'analyse doit mettre en évidence les tendances, motifs, ou particularités statistiques observées qui justifient la prédiction, en référençant explicitement comment chaque "modèle simulé" a contribué, et en notant si certains numéros tombent dans une plage de confiance d\'intérêt (67-73%).'),
 });
 export type GenerateLottoPredictionsOutput = z.infer<
   typeof GenerateLottoPredictionsOutputSchema
@@ -72,11 +72,12 @@ Votre mission est de simuler l'analyse de trois types de modèles et de combiner
     *   Appliquer une **pondération conceptuelle** (par exemple, 40% pour les signaux de type XGBoost, 30% pour Random Forest, 30% pour RNN-LSTM) pour équilibrer leurs forces et arriver à une prédiction finale robuste.
     *   Sélectionner les 5 numéros UNIQUES (1-90) ayant les plus forts signaux combinés.
     *   Attribuer un score de confiance individuel (0.0 - 1.0) à chaque numéro prédit, reflétant la force des signaux combinés et la convergence des analyses simulées.
+    *   Dans votre évaluation de la confiance, une plage de **67% à 73%** est considérée comme particulièrement intéressante, indiquant un bon équilibre entre potentiel et surévaluation. Si votre analyse identifie des numéros dont la confiance se situe naturellement dans cette plage, mettez-les en évidence dans votre explication si possible, en expliquant pourquoi cette confiance est appropriée.
 
 5.  **Analyse Détaillée (champ 'analysis', en FRANÇAIS) :**
     *   Expliquez clairement comment votre simulation de l'approche hybride (XGBoost, Random Forest, RNN-LSTM) et l'analyse des {{{pastResults}}} ont conduit à la sélection des numéros spécifiques et à leurs scores de confiance.
     *   Pour chaque "modèle simulé", décrivez brièvement les facteurs ou observations les plus importants qu'il aurait identifiés dans les {{{pastResults}}}. Par exemple, "L'analyse de type XGBoost a souligné la fréquence élevée du numéro X et l'écart important du numéro Y. L'analyse de type LSTM a identifié une tendance à la hausse pour les sommes des tirages."
-    *   Concluez sur la manière dont la combinaison pondérée de ces signaux a justifié la prédiction finale.
+    *   Concluez sur la manière dont la combinaison pondérée de ces signaux a justifié la prédiction finale. Si des numéros prédits tombent dans la plage de confiance d'intérêt (67%-73%), mentionnez-le et expliquez la pertinence de cette confiance pour ces numéros.
 
 Assurez-vous que votre sortie est un objet JSON valide respectant le schéma de sortie.
 Les 5 numéros prédits doivent être dans le champ 'predictedNumbers'.
