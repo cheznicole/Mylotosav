@@ -1,9 +1,9 @@
 
-// Implémentation de la prédiction des tirages du Loto Bonheur. Les prédictions sont générées en utilisant un modèle hybride XGBoost + RNN-LSTM pré-entraîné.
+// Implémentation de la prédiction des tirages du Loto Bonheur.
 'use server';
 
 /**
- * @fileOverview Genkit flow to generate Loto Bonheur predictions by simulating an advanced hybrid AI model.
+ * @fileOverview Genkit flow to generate Loto Bonheur predictions using AI analysis of past results.
  *
  * - generateLottoPredictions - A function that generates lottery predictions.
  * - GenerateLottoPredictionsInput - The input type for the generateLottoPredictions function.
@@ -30,7 +30,7 @@ const GenerateLottoPredictionsOutputSchema = z.object({
     .array(z.number().min(0).max(1))
     .length(5)
     .describe('An array of 5 confidence scores (between 0 and 1) for each corresponding predicted number.'),
-  analysis: z.string().describe('Une analyse détaillée en français expliquant comment le modèle hybride simulé (XGBoost, Random Forest, RNN-LSTM) et diverses stratégies statistiques ont influencé la sélection et les scores de confiance. Elle doit souligner les contributions de chaque composant simulé.'),
+  analysis: z.string().describe('Une analyse détaillée en FRANÇAIS expliquant comment l\'IA est parvenue aux numéros prédits et à leurs scores de confiance, en se basant sur l\'analyse des {{{pastResults}}}. L\'analyse doit mettre en évidence les tendances, motifs, ou particularités statistiques observées dans les données fournies qui justifient la prédiction.'),
 });
 export type GenerateLottoPredictionsOutput = z.infer<
   typeof GenerateLottoPredictionsOutputSchema
@@ -48,27 +48,20 @@ const generateLottoPredictionsPrompt = ai.definePrompt({
   name: 'generateLottoPredictionsPrompt',
   input: {schema: GenerateLottoPredictionsInputSchema},
   output: {schema: GenerateLottoPredictionsOutputSchema},
-  prompt: `Vous êtes une IA experte en prédiction de loterie, simulant une architecture de modèle hybride avancée pour prédire les numéros du Loto Bonheur (5 numéros uniques entre 1 et 90).
-Votre système interne simule la combinaison des analyses de trois sous-modèles spécialisés :
-1.  **XGBoost (Simulation)** : Ce composant simulé effectue une analyse statistique profonde des données historiques, identifiant les caractéristiques clés, leurs interactions, et les facteurs numériques importants (ex: fréquence absolue et relative, délai de réapparition, numéro le plus fréquent associé à un autre, impact du N+20, analyse comparative machine/gagnants, effet de la multiplication par 1.615 sur les numéros du dernier tirage). Il évalue la pertinence des facteurs et des motifs. Il prend en compte les données historiques récentes (5-10 derniers tirages) et à plus long terme.
-2.  **Random Forest (Simulation)** : Ce composant simulé évalue la robustesse des interactions identifiées par XGBoost et d'autres signaux. Il aide à la validation croisée des motifs et assure une bonne généralisation en considérant diverses combinaisons de caractéristiques. Il contribue à la solidité des prédictions face à des scénarios variés et à l'équilibre entre numéros fréquents et rares, en tenant compte de la qualité et des potentiels déséquilibres dans les données d'entrée.
-3.  **RNN-LSTM (Simulation)** : Ce composant simulé se concentre sur l'identification des tendances temporelles (court et long terme), des séquences et des dépendances à long terme dans l'historique des tirages. Il cherche à comprendre comment les numéros évoluent et interagissent sur différentes fenêtres de temps.
+  prompt: `Vous êtes une IA experte en analyse de données de loterie pour prédire les numéros du Loto Bonheur (5 numéros uniques entre 1 et 90).
 
 Données des résultats passés fournies :
 {{{pastResults}}}
 
 Votre tâche est la suivante :
-1.  **Analyse Hybride Simulée** : En vous basant sur les {{{pastResults}}}, "simulez" l'analyse que ces trois composants (XGBoost, Random Forest, RNN-LSTM) effectueraient. Considérez les forces de chacun :
-    *   **XGBoost Simulé** : Quels sont les facteurs statistiques (fréquences, écarts, associations, transformations spécifiques comme N+20 ou x1.615, motifs non linéaires) qui semblent les plus pertinents ? Comment les données récentes et anciennes influencent-elles ces facteurs ?
-    *   **Random Forest Simulé** : Comment ces facteurs interagissent-ils ? Y a-t-il des combinaisons de numéros ou de caractéristiques qui se démarquent par leur robustesse et leur capacité à généraliser (par exemple, éviter le sur-ajustement sur les numéros les plus récents en tenant compte des déséquilibres) ?
-    *   **RNN-LSTM Simulé** : Quelles tendances temporelles (numéros devenant "chauds" ou "froids" sur certaines périodes, séquences récurrentes, cycles) peuvent être extrapolées ? Comment les données les plus récentes influencent-elles ces tendances par rapport à l'historique plus ancien ?
-2.  **Synthèse et Prédiction (Modèle d'Ensemble Simulé)** : Agissez comme un modèle d'ensemble qui pondère et combine les "conclusions" de ces trois analyses simulées pour :
-    *   Prédire exactement 5 numéros UNIQUES (entre 1 et 90).
-    *   Attribuer un score de confiance individuel (0.0 - 1.0) à chaque numéro prédit. Ce score doit refléter la convergence et la force des signaux provenant des trois analyses simulées. Une confiance élevée indique une forte concordance entre les analyses simulées et les divers facteurs considérés.
+1.  **Analyse Approfondie des Données** : En vous basant UNIQUEMENT sur les {{{pastResults}}}, analysez les fréquences des numéros, les écarts (délais de réapparition), les numéros "chauds" (fréquemment sortis récemment) et "froids" (longtemps sans sortir), les paires ou triplets de numéros qui apparaissent souvent ensemble, et toute autre tendance ou motif statistique pertinent que vous pouvez identifier.
+2.  **Prédiction et Scores de Confiance** :
+    *   Prédisez exactement 5 numéros UNIQUES (entre 1 et 90) pour le prochain tirage.
+    *   Attribuez un score de confiance individuel (0.0 - 1.0) à chaque numéro prédit. Ce score doit refléter la force des indicateurs que vous avez identifiés dans votre analyse pour ce numéro spécifique. Une confiance élevée indique une forte convergence de plusieurs facteurs analytiques.
 3.  **Analyse Détaillée (champ 'analysis', en FRANÇAIS)** : Fournissez une explication détaillée et perspicace en FRANÇAIS (minimum 3-4 phrases).
-    *   Expliquez comment les "informations" issues de la simulation de XGBoost, de Random Forest, ET de RNN-LSTM ont collectivement conduit à la sélection des numéros spécifiques et à leurs scores de confiance.
-    *   Identifiez 2-3 facteurs ou motifs clés (par exemple, "forte récurrence identifiée par XGBoost, confirmée par la robustesse de Random Forest, et alignée avec une tendance haussière de LSTM", ou "prise en compte d'un délai de réapparition significatif et d'une association fréquente X-Y") qui ont été déterminants.
-    *   Soyez précis sur les éléments qui ont augmenté ou diminué la confiance pour certains numéros, en vous référant aux contributions simulées de chaque type de modèle.
+    *   Expliquez clairement comment votre analyse des {{{pastResults}}} a conduit à la sélection des numéros spécifiques et à leurs scores de confiance.
+    *   Mettez en évidence les 2-3 facteurs, tendances ou motifs statistiques les plus importants que vous avez observés dans les données fournies et qui justifient votre prédiction.
+    *   Soyez précis sur les éléments qui ont augmenté ou diminué la confiance pour certains numéros, en vous référant directement à votre analyse des données historiques.
 
 Assurez-vous que votre sortie est un objet JSON valide respectant le schéma de sortie.
 Les 5 numéros prédits doivent être dans le champ 'predictedNumbers'.
@@ -76,7 +69,7 @@ Les 5 scores de confiance correspondants dans 'confidenceScores'.
 L'analyse détaillée en FRANÇAIS dans le champ 'analysis'.
 `,
 });
-// Minor modification for build system re-evaluation.
+
 const generateLottoPredictionsFlow = ai.defineFlow(
   {
     name: 'generateLottoPredictionsFlow',
@@ -106,7 +99,8 @@ const generateLottoPredictionsFlow = ai.defineFlow(
         if (uniquePredictedNumbers.length > 5) {
             output.predictedNumbers = uniquePredictedNumbers.slice(0, 5);
         } else {
-            throw new Error("L'IA a prédit des numéros non uniques et pas assez de numéros uniques pour former un ensemble de 5. Attendu : 5 numéros uniques.");
+            // If less than 5 unique numbers, it's a more critical failure to meet the requirements
+            throw new Error(`L'IA a prédit des numéros non uniques et pas assez pour former un ensemble de 5. Attendu : 5 numéros uniques. Reçus (uniques) : ${uniquePredictedNumbers.join(',')}`);
         }
     } else {
         output.predictedNumbers = uniquePredictedNumbers; // Ensure it's the unique set
@@ -119,10 +113,11 @@ const generateLottoPredictionsFlow = ai.defineFlow(
     }
     if (!output.analysis || output.analysis.trim() === "" || output.analysis.length < 20) { // Added length check
         console.warn("L'IA a retourné une chaîne d'analyse vide, manquante ou très courte. Sortie :", output.analysis);
-        output.analysis = "L'analyse détaillée sur la contribution des modèles simulés (XGBoost, Random Forest, RNN-LSTM) n'a pas été fournie ou était insuffisante par l'IA pour cette prédiction.";
+        // Provide a default or throw an error if analysis is critical
+        output.analysis = "L'analyse détaillée des facteurs de prédiction n'a pas été fournie ou était insuffisante par l'IA pour cette prédiction.";
     }
 
     return output;
   }
 );
-// Another modification attempt to address potential build/compilation warnings.
+// Simplified prediction logic, removing complex model simulations.
