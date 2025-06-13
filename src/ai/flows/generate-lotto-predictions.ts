@@ -18,7 +18,7 @@ const GenerateLottoPredictionsInputSchema = z.object({
   pastResults: z
     .string()
     .describe(
-      'A string containing the past lottery results data, preferably recent results. Example format: "Date: YYYY-MM-DD, Gagnants: N1,N2,N3,N4,N5, Machine: M1,M2; Date: YYYY-MM-DD, ..." '
+      'A string containing the past lottery results data, preferably recent results for a specific draw type. Example format: "Date: YYYY-MM-DD, Gagnants: N1,N2,N3,N4,N5, Machine: M1,M2; Date: YYYY-MM-DD, ..." '
     ),
 });
 export type GenerateLottoPredictionsInput = z.infer<
@@ -31,7 +31,7 @@ const GenerateLottoPredictionsOutputSchema = z.object({
     .array(z.number().min(0).max(1))
     .length(5)
     .describe('An array of 5 confidence scores (between 0 and 1) for each corresponding predicted number.'),
-  analysis: z.string().describe('Une analyse détaillée en FRANÇAIS expliquant comment l\'IA est parvenue aux numéros prédits et à leurs scores de confiance, en se basant sur une simulation d\'analyse hybride (XGBoost, Random Forest, RNN-LSTM) des {{{pastResults}}}. L\'analyse doit mettre en évidence les tendances, motifs, ou particularités statistiques observées qui justifient la prédiction, en référençant explicitement comment chaque "modèle simulé" a contribué, et en notant si certains numéros tombent dans une plage de confiance d\'intérêt (67-73%).'),
+  analysis: z.string().describe('Une analyse détaillée en FRANÇAIS expliquant comment l\'IA est parvenue aux numéros prédits et à leurs scores de confiance, en se basant sur une simulation d\'analyse hybride (XGBoost, Random Forest, RNN-LSTM) des {{{pastResults}}}. L\'analyse doit mettre en évidence les tendances, motifs, ou particularités statistiques observées qui justifient la prédiction, en référençant explicitement comment chaque "modèle simulé" a contribué, et en notant si certains numéros tombent dans une plage de confiance d\'intérêt (67-73%). L\'analyse doit se concentrer exclusivement sur les données fournies dans {{{pastResults}}} pour le tirage concerné, car chaque type de tirage (ex: Reveil, Etoile) est indépendant.'),
 });
 export type GenerateLottoPredictionsOutput = z.infer<
   typeof GenerateLottoPredictionsOutputSchema
@@ -45,47 +45,48 @@ export async function generateLottoPredictions(
   return generateLottoPredictionsFlow(input);
 }
 
+// Refined prompt to simulate a sophisticated hybrid prediction model for Loto Bonheur.
 const generateLottoPredictionsPrompt = ai.definePrompt({
   name: 'generateLottoPredictionsPrompt',
   input: {schema: GenerateLottoPredictionsInputSchema},
   output: {schema: GenerateLottoPredictionsOutputSchema},
-  prompt: `Vous êtes une IA experte simulant une architecture de prédiction de loterie hybride sophistiquée pour le Loto Bonheur (5 numéros uniques entre 1 et 90), en vous basant sur les {{{pastResults}}}.
+  prompt: `Vous êtes une IA experte simulant une architecture de prédiction de loterie hybride sophistiquée pour le Loto Bonheur (5 numéros uniques entre 1 et 90), en vous basant *exclusivement* sur les données fournies dans {{{pastResults}}} pour le type de tirage concerné. Chaque type de tirage (ex: Reveil, Etoile, Akwaba) est indépendant et votre analyse ne doit pas s'appuyer sur des données ou tendances d'autres types de tirages non fournis ici.
 
 Votre mission est de simuler l'analyse de trois types de modèles et de combiner leurs "signaux" pour une prédiction robuste :
 
 1.  **XGBoost (Simulation) :**
     *   Analyser les caractéristiques statistiques avancées comme les **écarts** de sortie (combien de tirages depuis la dernière apparition), les **fréquences** globales et récentes des numéros.
     *   Intégrer comme caractéristiques spécifiques : les **différences internes** entre numéros d'un même tirage, les **différences positionnelles** (ex: entre le 1er et le 2ème numéro tiré sur plusieurs tirages), les **sommes** des numéros par tirage, et les **unités (modulo 10)** des numéros.
-    *   Prioriser les numéros et les **plages de numéros** (ex: 1-9, 10-19, etc.) qui apparaissent fréquemment ou qui ont des écarts significatifs.
+    *   Prioriser les numéros et les **plages de numéros** (ex: 1-9, 10-19, etc.) qui apparaissent fréquemment ou qui ont des écarts significatifs dans les {{{pastResults}}}.
 
 2.  **Random Forest (Simulation) :**
-    *   Modéliser les **interactions complexes entre les numéros**, y compris les **paires consécutives** ou statistiquement fréquentes, et les **interactions et combinaisons par plage** (ex: un numéro de la dizaine 10-19 apparaissant avec un numéro de la dizaine 40-49).
-    *   Valider la robustesse des combinaisons potentielles face au bruit statistique.
+    *   Modéliser les **interactions complexes entre les numéros**, y compris les **paires consécutives** ou statistiquement fréquentes, et les **interactions et combinaisons par plage** (ex: un numéro de la dizaine 10-19 apparaissant avec un numéro de la dizaine 40-49) observées dans les {{{pastResults}}}.
+    *   Valider la robustesse des combinaisons potentielles face au bruit statistique inhérent aux {{{pastResults}}}.
 
 3.  **RNN-LSTM (Simulation) :**
-    *   Capturer les **tendances et séquences temporelles** dans les données.
+    *   Capturer les **tendances et séquences temporelles** dans les données {{{pastResults}}}.
     *   Analyser les **séquences de différences** entre numéros consécutifs tirés au fil du temps, les **séquences de sommes** de tirages, et les **séquences d'unités (modulo 10)** des numéros sur plusieurs tirages.
-    *   Prédire les récurrences probables en s'entraînant (conceptuellement) sur les données historiques.
+    *   Prédire les récurrences probables en s'entraînant (conceptuellement) sur les {{{pastResults}}}.
 
 4.  **Approche Hybride (Simulation) :**
-    *   Combiner les 'prédictions' ou 'signaux' des trois modèles simulés ci-dessus.
-    *   Appliquer une **pondération conceptuelle** (par exemple, 40% pour les signaux de type XGBoost, 30% pour Random Forest, 30% pour RNN-LSTM) pour équilibrer leurs forces et arriver à une prédiction finale robuste.
+    *   Combiner les 'prédictions' ou 'signaux' des trois modèles simulés ci-dessus, basés *uniquement* sur l'analyse des {{{pastResults}}}.
+    *   Appliquer une **pondération conceptuelle** (par exemple, 40% pour les signaux de type XGBoost, 30% pour Random Forest, 30% pour RNN-LSTM) pour équilibrer leurs forces et arriver à une prédiction finale robuste pour le prochain tirage du type analysé.
     *   Sélectionner les 5 numéros UNIQUES (1-90) ayant les plus forts signaux combinés.
-    *   Attribuer un score de confiance individuel (0.0 - 1.0) à chaque numéro prédit, reflétant la force des signaux combinés et la convergence des analyses simulées.
-    *   Dans votre évaluation de la confiance, une plage de **67% à 73%** est considérée comme particulièrement intéressante, indiquant un bon équilibre entre potentiel et surévaluation. Si votre analyse identifie des numéros dont la confiance se situe naturellement dans cette plage, mettez-les en évidence dans votre explication si possible, en expliquant pourquoi cette confiance est appropriée.
+    *   Attribuer un score de confiance individuel (0.0 - 1.0) à chaque numéro prédit, reflétant la force des signaux combinés et la convergence des analyses simulées sur les {{{pastResults}}}.
+    *   Dans votre évaluation de la confiance, une plage de **67% à 73%** est considérée comme particulièrement intéressante, indiquant un bon équilibre entre potentiel et surévaluation. Si votre analyse des {{{pastResults}}} identifie des numéros dont la confiance se situe naturellement dans cette plage, mettez-les en évidence dans votre explication si possible, en expliquant pourquoi cette confiance est appropriée pour ces numéros dans le contexte de ce tirage spécifique.
 
 5.  **Analyse Détaillée (champ 'analysis', en FRANÇAIS) :**
-    *   Expliquez clairement comment votre simulation de l'approche hybride (XGBoost, Random Forest, RNN-LSTM) et l'analyse des {{{pastResults}}} ont conduit à la sélection des numéros spécifiques et à leurs scores de confiance.
-    *   Pour chaque "modèle simulé", décrivez brièvement les facteurs ou observations les plus importants qu'il aurait identifiés dans les {{{pastResults}}}. Par exemple, "L'analyse de type XGBoost a souligné la fréquence élevée du numéro X et l'écart important du numéro Y. L'analyse de type LSTM a identifié une tendance à la hausse pour les sommes des tirages."
-    *   Concluez sur la manière dont la combinaison pondérée de ces signaux a justifié la prédiction finale. Si des numéros prédits tombent dans la plage de confiance d'intérêt (67%-73%), mentionnez-le et expliquez la pertinence de cette confiance pour ces numéros.
+    *   Expliquez clairement comment votre simulation de l'approche hybride (XGBoost, Random Forest, RNN-LSTM) et l'analyse des {{{pastResults}}} ont conduit à la sélection des numéros spécifiques et à leurs scores de confiance pour *ce type de tirage*.
+    *   Pour chaque "modèle simulé", décrivez brièvement les facteurs ou observations les plus importants qu'il aurait identifiés *exclusivement* dans les {{{pastResults}}}. Par exemple, "L'analyse de type XGBoost, basée sur les données fournies, a souligné la fréquence élevée du numéro X et l'écart important du numéro Y pour ce tirage. L'analyse de type LSTM a identifié une tendance à la hausse pour les sommes des tirages dans cet historique spécifique."
+    *   Concluez sur la manière dont la combinaison pondérée de ces signaux a justifié la prédiction finale. Si des numéros prédits tombent dans la plage de confiance d'intérêt (67%-73%), mentionnez-le et expliquez la pertinence de cette confiance pour ces numéros, toujours en lien avec les {{{pastResults}}} fournis.
 
 Assurez-vous que votre sortie est un objet JSON valide respectant le schéma de sortie.
 Les 5 numéros prédits doivent être dans le champ 'predictedNumbers'.
 Les 5 scores de confiance correspondants dans 'confidenceScores'.
-L'analyse détaillée en FRANÇAIS dans le champ 'analysis'.
+L'analyse détaillée en FRANÇAIS, focalisée sur les {{{pastResults}}} du tirage en question, dans le champ 'analysis'.
 `,
 });
-// Minor refinement of prompt logic.
+// Minor refinement of prompt logic regarding draw independence.
 const generateLottoPredictionsFlow = ai.defineFlow(
   {
     name: 'generateLottoPredictionsFlow',
