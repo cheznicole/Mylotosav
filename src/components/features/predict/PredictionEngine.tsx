@@ -14,17 +14,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import LotteryNumberDisplay from '@/components/features/lottery/LotteryNumberDisplay';
-import { Loader2, Wand2, FileText, AlertTriangle, Lightbulb, CheckSquare, Info, TableIcon } from 'lucide-react'; // Added Info, TableIcon
-import type { StrategyPrediction } from '@/types'; // StrategyPrediction is still used
+import { Loader2, Wand2, FileText, AlertTriangle, Lightbulb, CheckSquare, Info, TableIcon } from 'lucide-react';
+import type { StrategyPrediction } from '@/types';
 import { fetchLotteryResults as fetchActualLotteryResults, DRAW_SCHEDULE } from '@/services/lotteryApi';
 import { 
   generateLottoPredictions, 
-  type GenerateLottoPredictionsInput, // Import input type
-  type GenerateLottoPredictionsOutput // Import output type
+  type GenerateLottoPredictionsInput,
+  type GenerateLottoPredictionsOutput
 } from '@/ai/flows/generate-lotto-predictions';
 import { predictLottoNumbersWithStrategy } from '@/ai/flows/prompt-for-lotto-strategy';
 import { displayPredictionConfidence, type DisplayPredictionConfidenceInput, type DisplayPredictionConfidenceOutput } from '@/ai/flows/display-prediction-confidence';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'; // Removed Legend as it was not used in confidence chart
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Alert, AlertTitle, AlertDescription as UiAlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -33,7 +33,7 @@ interface PredictionEngineProps {
   drawName: string; 
 }
 
-// Schema for the "Modèle Basé sur Stratégie Complexe" (formerly PastResults)
+// Schema for the "Modèle Basé sur Stratégie Complexe"
 const ModelPredictionFormSchema = z.object({
   lastWinningNumbersString: z
     .string()
@@ -67,7 +67,6 @@ const ConfidenceCheckerSchema = z.object({
     }, { message: "Veuillez entrer entre 1 et 5 numéros."})
     .refine(value => {
         const numbers = value.split(',').map(num => parseInt(num.trim(), 10));
-        // Dynamically get maxNumber from form values for this refinement if possible, or default
         const maxNumFromForm = (document.getElementById('maxNumberForConfidence') as HTMLInputElement)?.value;
         const maxNum = maxNumFromForm ? parseInt(maxNumFromForm, 10) : 90;
         return numbers.every(num => !isNaN(num) && num >= 1 && num <= maxNum);
@@ -94,7 +93,7 @@ function ConfidenceCheckerTab({ pageDrawName }: { pageDrawName: string }) {
       predictedNumbers: "",
       maxNumber: "90",
     },
-     mode: "onChange", // Validate on change for better UX with dynamic maxNumber
+     mode: "onChange",
   });
 
    useEffect(() => {
@@ -301,15 +300,14 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
   const [modelPrediction, setModelPrediction] = useState<GenerateLottoPredictionsOutput | null>(null);
   const [isLoadingStrategy, setIsLoadingStrategy] = useState(false);
   const [strategyPrediction, setStrategyPrediction] = useState<StrategyPrediction | null>(null);
-  const [initialHistoricalData, setInitialHistoricalData] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const modelPredictionForm = useForm<ModelPredictionFormData>({
     resolver: zodResolver(ModelPredictionFormSchema),
     defaultValues: {
       lastWinningNumbersString: "",
-      constantToAddString: "1", // Default constant
-      maxLotteryNumberString: "90", // Default max number
+      constantToAddString: "1", 
+      maxLotteryNumberString: "90", 
       historicalData: "",
     },
   });
@@ -322,39 +320,49 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
   useEffect(() => {
     async function loadInitialData() {
       setError(null);
+      setIsLoadingModel(true); // Indicate loading for model tab
       try {
         const allApiResults = await fetchActualLotteryResults(); 
         const relevantApiResults = allApiResults
           .filter(r => r.draw_name === pageDrawName)
-          .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Sort by date desc
+          .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
         
+        let historicalDataString = "";
+        let defaultLastWinningNumbers = "1,2,3,4,5"; // Fallback
+
         if (relevantApiResults.length > 0) {
-            const historicalDataString = relevantApiResults
-                .slice(0, 30) // Use last 30 relevant results for historical data
+            historicalDataString = relevantApiResults
+                .slice(0, 50) // Use last 50 relevant results for historical data
                 .map(r => `Date: ${r.date}, Gagnants: ${r.gagnants.join(',')}${r.machine && r.machine.length > 0 ? `, Machine: ${r.machine.join(',')}` : ''}`)
                 .join('; ');
-            setInitialHistoricalData(historicalDataString);
-            modelPredictionForm.setValue('historicalData', historicalDataString);
-
-            // Set last winning numbers from the most recent result
-            modelPredictionForm.setValue('lastWinningNumbersString', relevantApiResults[0].gagnants.join(', '));
-
+            
+            // Set last winning numbers from the most recent result for this drawName
+            defaultLastWinningNumbers = relevantApiResults[0].gagnants.join(', ');
         } else {
-            const exampleHistorical = `Exemple pour ${pageDrawName}: Date: 2024-07-20, Gagnants: 5,12,23,34,45; Date: 2024-07-19, Gagnants: 2,10,20,30,40; ... (Aucun résultat récent trouvé pour ${pageDrawName}, veuillez entrer des données manuellement.)`;
-            setInitialHistoricalData(exampleHistorical);
-            modelPredictionForm.setValue('historicalData', exampleHistorical);
-            modelPredictionForm.setValue('lastWinningNumbersString', '1,2,3,4,5'); // Placeholder
+            historicalDataString = `Exemple pour ${pageDrawName}: Date: 2024-07-20, Gagnants: 5,12,23,34,45; Date: 2024-07-19, Gagnants: 2,10,20,30,40; ... (Aucun résultat récent trouvé pour ${pageDrawName}, veuillez entrer des données manuellement ou via l'admin.)`;
         }
+
+        modelPredictionForm.reset({
+            lastWinningNumbersString: defaultLastWinningNumbers,
+            constantToAddString: modelPredictionForm.getValues("constantToAddString") || "1",
+            maxLotteryNumberString: modelPredictionForm.getValues("maxLotteryNumberString") || "90",
+            historicalData: historicalDataString,
+        });
 
       } catch (err) {
         console.error(`Failed to load initial data for AI for ${pageDrawName}`, err);
-        const loadErrorMsg = `Impossible de charger les données initiales pour ${pageDrawName}. Vérifiez la console.`;
+        const loadErrorMsg = `Impossible de charger les données historiques pour ${pageDrawName}. Vérifiez la console.`;
         setError(loadErrorMsg);
         const exampleHistorical = `Exemple: Date: 2024-07-20, Gagnants: 5,12,23,34,45 (pour ${pageDrawName}); ...`;
-        setInitialHistoricalData(exampleHistorical);
-        modelPredictionForm.setValue('historicalData', exampleHistorical);
-        modelPredictionForm.setValue('lastWinningNumbersString', '1,2,3,4,5');
-         toast({ variant: "destructive", title: "Erreur de Chargement Initial", description: loadErrorMsg });
+        modelPredictionForm.reset({
+            lastWinningNumbersString: "1,2,3,4,5",
+            constantToAddString: "1",
+            maxLotteryNumberString: "90",
+            historicalData: exampleHistorical,
+        });
+        toast({ variant: "destructive", title: "Erreur de Chargement des Données", description: loadErrorMsg, duration: 7000 });
+      } finally {
+        setIsLoadingModel(false);
       }
     }
     if (pageDrawName) {
@@ -363,16 +371,6 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageDrawName]);
   
-  // This useEffect ensures that if initialHistoricalData is fetched after form init, it's set.
-  useEffect(() => {
-    if (initialHistoricalData && modelPredictionForm.getValues("historicalData") === "") {
-       modelPredictionForm.reset({ 
-           ...modelPredictionForm.getValues(), // keep other defaults if any were set manually
-           historicalData: initialHistoricalData 
-        });
-    }
-  }, [initialHistoricalData, modelPredictionForm]);
-
 
   const onModelPredictionSubmit: SubmitHandler<ModelPredictionFormData> = async (data) => {
     setIsLoadingModel(true);
@@ -490,12 +488,12 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
     let mainExplanation: string | undefined = undefined;
     let isModelOutputType = false;
 
-    if ('finalPredictedNumbers' in prediction && prediction.finalPredictedNumbers) { // GenerateLottoPredictionsOutput
+    if ('finalPredictedNumbers' in prediction && prediction.finalPredictedNumbers) { 
       numbersToDisplay = prediction.finalPredictedNumbers;
       confidenceToDisplay = prediction.finalConfidenceScores;
-      mainExplanation = prediction.finalPredictionExplanation; // Will be rendered by renderModelPredictionDetails
+      mainExplanation = prediction.finalPredictionExplanation; 
       isModelOutputType = true;
-    } else if ('predictedNumbers' in prediction && prediction.predictedNumbers) { // StrategyPrediction
+    } else if ('predictedNumbers' in prediction && prediction.predictedNumbers) { 
       numbersToDisplay = prediction.predictedNumbers;
       confidenceToDisplay = prediction.confidenceScores;
       mainExplanation = (prediction as StrategyPrediction).explanation;
@@ -547,10 +545,10 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
               </div>
             </div>
           )}
-          {/* Detailed explanation for model output is rendered by renderModelPredictionDetails */}
+          
           {isModelOutputType && <div className="mt-4">{renderModelPredictionDetails(prediction as GenerateLottoPredictionsOutput)}</div>}
           
-          {/* Explanation for strategy output (if not model output) */}
+          
           {!isModelOutputType && mainExplanation && (
             <div>
               <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Explication IA (Stratégie):</h4>
@@ -613,7 +611,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
                   name="lastWinningNumbersString"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>5 Derniers Numéros Gagnants (séparés par virgule)</FormLabel>
+                      <FormLabel>5 Derniers Numéros Gagnants (séparés par virgule, pour le tableau)</FormLabel>
                       <FormControl><Input placeholder="Ex: 5,12,23,34,45" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
@@ -648,7 +646,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
                   name="historicalData"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Données Historiques des Tirages ({pageDrawName})</FormLabel>
+                      <FormLabel>Données Historiques des Tirages ({pageDrawName}) (pour simulation IA)</FormLabel>
                       <FormControl>
                         <Textarea
                           placeholder={`Entrez les résultats passés pour ${pageDrawName}, ex: 'Date: 2023-01-01, Gagnants: 1,2,3,4,5; ...'`}
@@ -723,3 +721,4 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
   );
 }
 // Minor adjustment for build re-evaluation.
+// Another comment to ensure this file is processed cleanly by the build system.
