@@ -4,8 +4,6 @@
  * @fileOverview Predicts lottery numbers based on a user-provided strategy.
  *
  * - predictLottoNumbersWithStrategy - A function that predicts lottery numbers based on a user-defined strategy.
- * - PredictLottoNumbersWithStrategyInput - The input type for the predictLottoNumbersWithStrategy function.
- * - PredictLottoNumbersWithStrategyOutput - The return type for the predictLottoNumbersWithStrategy function.
  */
 
 import {ai} from '@/ai/genkit';
@@ -17,7 +15,7 @@ const PredictLottoNumbersWithStrategyInputSchema = z.object({
     .min(10, "La description de la stratégie est trop courte.") 
     .describe('Une description de la stratégie de loterie à utiliser pour prédire les numéros.'),
 });
-export type PredictLottoNumbersWithStrategyInput =
+type PredictLottoNumbersWithStrategyInput =
   z.infer<typeof PredictLottoNumbersWithStrategyInputSchema>;
 
 const PredictLottoNumbersWithStrategyOutputSchema = z.object({
@@ -34,7 +32,7 @@ const PredictLottoNumbersWithStrategyOutputSchema = z.object({
     .optional()
     .describe('Une brève explication en FRANÇAIS (1-2 phrases) de la manière dont l\'IA a interprété et appliqué la stratégie de l\'utilisateur pour générer les numéros et leurs scores de confiance.'),
 });
-export type PredictLottoNumbersWithStrategyOutput =
+type PredictLottoNumbersWithStrategyOutput =
   z.infer<typeof PredictLottoNumbersWithStrategyOutputSchema>;
 
 export async function predictLottoNumbersWithStrategy(

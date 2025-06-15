@@ -7,15 +7,13 @@
  * involving table generation, simulated algorithm predictions, and rule-based filtering.
  *
  * - generateLottoPredictions - A function that generates lottery predictions based on the new strategy.
- * - GenerateLottoPredictionsInput - The input type for the generateLottoPredictions function.
- * - GenerateLottoPredictionsOutput - The return type for the generateLottoPredictionsOutput function.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 // Corrected input field descriptions to match the prompt's usage
-export const GenerateLottoPredictionsInputSchema = z.object({
+const GenerateLottoPredictionsInputSchema = z.object({
   lastWinningNumbers: z
     .array(z.number().min(1))
     .length(5, { message: "Doit fournir exactement 5 numéros du dernier tirage."})
@@ -35,7 +33,7 @@ export const GenerateLottoPredictionsInputSchema = z.object({
       'Données historiques complètes des tirages passés (dates, numéros gagnants, numéros machine) pour ce type de tirage, utilisées par lIA pour simuler les prédictions algorithmiques et appliquer les stratégies secondaires. Format : "Date: YYYY-MM-DD, Gagnants: N1,N2,N3,N4,N5, Machine: M1,M2; ..."'
     ),
 });
-export type GenerateLottoPredictionsInput = z.infer<
+type GenerateLottoPredictionsInput = z.infer<
   typeof GenerateLottoPredictionsInputSchema
 >;
 
@@ -45,7 +43,7 @@ const AlgorithmPredictionSchema = z.object({
     analysis: z.string().describe("Analyse simulée des algorithmes (XGBoost, RF, LSTM, Hybride) expliquant leurs prédictions brutes basées sur historicalData."),
 });
 
-export const GenerateLottoPredictionsOutputSchema = z.object({
+const GenerateLottoPredictionsOutputSchema = z.object({
   generatedTable: z
     .array(z.array(z.number().min(1)).length(5, "Chaque ligne du tableau doit contenir 5 numéros."))
     .length(5, "Le tableau généré doit contenir 5 lignes.")
@@ -63,7 +61,7 @@ export const GenerateLottoPredictionsOutputSchema = z.object({
     .describe('Scores de confiance pour chaque numéro final prédit, reflétant la stratégie globale.'),
   finalPredictionExplanation: z.string().describe("Explication détaillée en FRANÇAIS des choix finaux, justifiant chaque numéro par sa présence dans le tableau, l'accord avec les algorithmes simulés, et/ou les stratégies de prédiction secondaires (fréquences, co-occurrences, écarts, modularité, sommes, différences internes, etc.) basées sur historicalData."),
 });
-export type GenerateLottoPredictionsOutput = z.infer<
+type GenerateLottoPredictionsOutput = z.infer<
   typeof GenerateLottoPredictionsOutputSchema
 >;
 

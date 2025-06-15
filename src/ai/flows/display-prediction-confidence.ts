@@ -4,8 +4,6 @@
  * @fileOverview AI agent to display confidence score or probability for each predicted lottery number with advanced Bayesian analysis.
  *
  * - displayPredictionConfidence - Calculates confidence scores for predicted numbers using historical data and temporal weighting.
- * - DisplayPredictionConfidenceInput - Input type for the function.
- * - DisplayPredictionConfidenceOutput - Return type for the function.
  */
 
 import { ai } from '@/ai/genkit';
@@ -28,7 +26,7 @@ const DisplayPredictionConfidenceInputSchema = z.object({
     .describe('Weights for historical draws based on recency.')
     .optional(),
 });
-export type DisplayPredictionConfidenceInput = z.infer<
+type DisplayPredictionConfidenceInput = z.infer<
   typeof DisplayPredictionConfidenceInputSchema
 >;
 
@@ -42,7 +40,7 @@ const DisplayPredictionConfidenceOutputSchema = z.object({
     .describe('Error message if input validation fails.')
     .optional(),
 });
-export type DisplayPredictionConfidenceOutput = z.infer<
+type DisplayPredictionConfidenceOutput = z.infer<
   typeof DisplayPredictionConfidenceOutputSchema
 >;
 
@@ -51,7 +49,7 @@ export async function displayPredictionConfidence(
   input: DisplayPredictionConfidenceInput
 ): Promise<DisplayPredictionConfidenceOutput> {
   // Input validation
-  const { predictedNumbers, winningNumbersHistory, maxNumber, temporalWeights } = input;
+  const { predictedNumbers, winningNumbersHistory, maxNumber } = input; // temporalWeights removed from direct destructuring here as it's handled in flow
 
   // Validate predicted numbers
   if (!predictedNumbers.every(num => num >= 1 && num <= maxNumber)) {
@@ -141,4 +139,3 @@ const displayPredictionConfidenceFlow = ai.defineFlow(
     return { confidenceScores };
   }
 );
-

@@ -4,8 +4,6 @@
  * @fileOverview Genkit flow to extract lottery data from an image using OCR.
  *
  * - extractLotteryDataFromImage - A function that processes an image and extracts lottery results.
- * - ExtractLotteryDataInput - The input type for the extractLotteryDataFromImage function.
- * - ExtractLotteryDataOutput - The return type for the extractLotteryDataFromImage function.
  */
 
 import {ai} from '@/ai/genkit';
@@ -18,7 +16,7 @@ const ExtractLotteryDataInputSchema = z.object({
       "An image of lottery results, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
 });
-export type ExtractLotteryDataInput = z.infer<typeof ExtractLotteryDataInputSchema>;
+type ExtractLotteryDataInput = z.infer<typeof ExtractLotteryDataInputSchema>;
 
 const ExtractedResultSchema = z.object({
   date: z.string().describe("Date of the draw, e.g., '19 mai 2025' or '28 avril 2025'. Preserve the exact format from the image."),
@@ -30,7 +28,7 @@ const ExtractLotteryDataOutputSchema = z.object({
   drawName: z.string().describe("The name of the lottery draw extracted from the image header (e.g., 'Reveil' from a header like 'TIRAGE DE 10H REVEIL'). It should be just the draw name, not the full header text."),
   results: z.array(ExtractedResultSchema).describe("Array of extracted lottery results from the table rows."),
 });
-export type ExtractLotteryDataOutput = z.infer<typeof ExtractLotteryDataOutputSchema>;
+type ExtractLotteryDataOutput = z.infer<typeof ExtractLotteryDataOutputSchema>;
 
 
 export async function extractLotteryDataFromImage(
@@ -95,4 +93,3 @@ const extractLotteryDataFromImageFlow = ai.defineFlow(
     return output;
   }
 );
-

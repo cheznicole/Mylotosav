@@ -15,15 +15,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from '@/hooks/use-toast';
 import LotteryNumberDisplay from '@/components/features/lottery/LotteryNumberDisplay';
 import { Loader2, Wand2, FileText, AlertTriangle, Lightbulb, CheckSquare, Info, TableIcon } from 'lucide-react';
-import type { StrategyPrediction } from '@/types';
+// import type { StrategyPrediction } from '@/types'; // No longer importing StrategyPrediction from types
 import { fetchLotteryResults as fetchActualLotteryResults, DRAW_SCHEDULE } from '@/services/lotteryApi';
 import { 
-  generateLottoPredictions, 
-  type GenerateLottoPredictionsInput,
-  type GenerateLottoPredictionsOutput
+  generateLottoPredictions
 } from '@/ai/flows/generate-lotto-predictions';
 import { predictLottoNumbersWithStrategy } from '@/ai/flows/prompt-for-lotto-strategy';
-import { displayPredictionConfidence, type DisplayPredictionConfidenceInput, type DisplayPredictionConfidenceOutput } from '@/ai/flows/display-prediction-confidence';
+import { displayPredictionConfidence } from '@/ai/flows/display-prediction-confidence';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Alert, AlertTitle, AlertDescription as UiAlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -83,7 +81,7 @@ type ConfidenceCheckerFormData = z.infer<typeof ConfidenceCheckerSchema>;
 function ConfidenceCheckerTab({ pageDrawName }: { pageDrawName: string }) {
   const { toast } = useToast();
   const [checkerLoading, setCheckerLoading] = useState<boolean>(false);
-  const [checkerResult, setCheckerResult] = useState<DisplayPredictionConfidenceOutput | null>(null);
+  const [checkerResult, setCheckerResult] = useState<Awaited<ReturnType<typeof displayPredictionConfidence>> | null>(null);
   const [checkerError, setCheckerError] = useState<string | null>(null);
   
   const confidenceForm = useForm<ConfidenceCheckerFormData>({
@@ -129,7 +127,7 @@ function ConfidenceCheckerTab({ pageDrawName }: { pageDrawName: string }) {
         Math.exp(-0.1 * (historicalDraws.length - 1 - index)) 
       );
 
-      const input: DisplayPredictionConfidenceInput = {
+      const input: Parameters<typeof displayPredictionConfidence>[0] = {
         predictedNumbers: numbersArray,
         winningNumbersHistory,
         maxNumber: maxNumValidated,
@@ -297,9 +295,9 @@ function ConfidenceCheckerTab({ pageDrawName }: { pageDrawName: string }) {
 export default function PredictionEngine({ drawName: pageDrawName }: PredictionEngineProps) {
   const { toast } = useToast();
   const [isLoadingModel, setIsLoadingModel] = useState(false);
-  const [modelPrediction, setModelPrediction] = useState<GenerateLottoPredictionsOutput | null>(null);
+  const [modelPrediction, setModelPrediction] = useState<Awaited<ReturnType<typeof generateLottoPredictions>> | null>(null);
   const [isLoadingStrategy, setIsLoadingStrategy] = useState(false);
-  const [strategyPrediction, setStrategyPrediction] = useState<StrategyPrediction | null>(null);
+  const [strategyPrediction, setStrategyPrediction] = useState<Awaited<ReturnType<typeof predictLottoNumbersWithStrategy>> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const modelPredictionForm = useForm<ModelPredictionFormData>({
@@ -377,7 +375,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
     setModelPrediction(null);
     setError(null);
     try {
-      const inputForAI: GenerateLottoPredictionsInput = {
+      const inputForAI: Parameters<typeof generateLottoPredictions>[0] = {
         lastWinningNumbers: data.lastWinningNumbersString.split(',').map(n => parseInt(n.trim(), 10)),
         constantToAdd: parseInt(data.constantToAddString, 10),
         maxLotteryNumber: parseInt(data.maxLotteryNumberString, 10),
@@ -414,7 +412,12 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
     }
   };
 
-  const renderModelPredictionDetails = (prediction: GenerateLottoPredictionsOutput) => {
+  const renderModelPredictionDetails = (prediction: Awaited<ReturnType<typeof generateLottoPredictions>>) => {
+    // Check if prediction or its nested properties are null/undefined before accessing
+    if (!prediction?.generatedTable || !prediction.uniqueNumbersInTable || !prediction.algorithmRawPredictions) {
+        return <p className="text-sm text-muted-foreground">Données de prédiction du modèle incomplètes.</p>;
+    }
+
     return (
       <div className="space-y-6">
         <div>
@@ -448,7 +451,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
           </div>
         </div>
         
-        {prediction.uniqueNumbersFromPairs.length > 0 && (
+        {prediction.uniqueNumbersFromPairs && prediction.uniqueNumbersFromPairs.length > 0 && (
           <div>
             <h4 className="font-semibold mb-1">Numéros Uniques des Paires (Info):</h4>
             <div className="flex flex-wrap gap-1">
@@ -480,7 +483,10 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
   };
 
 
-  const renderPredictionOutput = (prediction: GenerateLottoPredictionsOutput | StrategyPrediction | null, title: string) => {
+  const renderPredictionOutput = (
+    prediction: Awaited<ReturnType<typeof generateLottoPredictions>> | Awaited<ReturnType<typeof predictLottoNumbersWithStrategy>> | null, 
+    title: string
+  ) => {
     if (!prediction) return null;
 
     let numbersToDisplay: number[] = [];
@@ -496,7 +502,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
     } else if ('predictedNumbers' in prediction && prediction.predictedNumbers) { 
       numbersToDisplay = prediction.predictedNumbers;
       confidenceToDisplay = prediction.confidenceScores;
-      mainExplanation = (prediction as StrategyPrediction).explanation;
+      mainExplanation = (prediction as Awaited<ReturnType<typeof predictLottoNumbersWithStrategy>>).explanation;
     }
 
     if (numbersToDisplay.length === 0) {
@@ -533,7 +539,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
               ))}
             </div>
           </div>
-          {confidenceToDisplay.length > 0 && (
+          {confidenceToDisplay && confidenceToDisplay.length > 0 && (
             <div>
               <h4 className="font-semibold mb-2">Scores de Confiance FINAux:</h4>
               <div className="flex flex-wrap gap-2">
@@ -546,7 +552,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
             </div>
           )}
           
-          {isModelOutputType && <div className="mt-4">{renderModelPredictionDetails(prediction as GenerateLottoPredictionsOutput)}</div>}
+          {isModelOutputType && modelPrediction && <div className="mt-4">{renderModelPredictionDetails(modelPrediction)}</div>}
           
           
           {!isModelOutputType && mainExplanation && (

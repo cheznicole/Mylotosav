@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { UploadCloud, Loader2, AlertTriangle, CheckCircle2, FileWarning, Info } from "lucide-react"; // Added Info
 import { Alert, AlertTitle, AlertDescription as UiAlertDescription } from "@/components/ui/alert"; // Renamed AlertDescription
-import { extractLotteryDataFromImage, type ExtractLotteryDataOutput } from "@/ai/flows/extract-lottery-data-from-image";
+import { extractLotteryDataFromImage } from "@/ai/flows/extract-lottery-data-from-image";
 import type { DrawResult } from "@/services/lotteryApi";
 import { addMultipleDrawResults } from "@/services/lotteryApi";
 import { parse as parseDate, isValid, format } from "date-fns";
@@ -62,7 +62,7 @@ export function AdminImageImport() {
   const [isImporting, setIsImporting] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [extractedData, setExtractedData] = useState<ExtractLotteryDataOutput | null>(null); 
+  const [extractedData, setExtractedData] = useState<Awaited<ReturnType<typeof extractLotteryDataFromImage>> | null>(null); 
   const [importError, setImportError] = useState<string | null>(null); 
   const [processingSummary, setProcessingSummary] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -95,7 +95,7 @@ export function AdminImageImport() {
     setImportError(null);
     setExtractedData(null);
     setProcessingSummary(null);
-    let aiResult: ExtractLotteryDataOutput;
+    let aiResult: Awaited<ReturnType<typeof extractLotteryDataFromImage>>;
 
     try {
       toast({title: "Traitement IA en cours...", description: "Extraction des données de l'image."});
