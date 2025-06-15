@@ -3,10 +3,10 @@
 'use server';
 
 /**
- * @fileOverview Genkit flow to generate Loto Bonheur predictions using AI analysis of past results,
- * simulating a hybrid approach (XGBoost, Random Forest, RNN-LSTM).
+ * @fileOverview Genkit flow to generate Loto Bonheur predictions using a complex, multi-step strategy
+ * involving table generation, simulated algorithm predictions, and rule-based filtering.
  *
- * - generateLottoPredictions - A function that generates lottery predictions.
+ * - generateLottoPredictions - A function that generates lottery predictions based on the new strategy.
  * - GenerateLottoPredictionsInput - The input type for the generateLottoPredictions function.
  * - GenerateLottoPredictionsOutput - The return type for the generateLottoPredictionsOutput function.
  */
@@ -15,23 +15,51 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const GenerateLottoPredictionsInputSchema = z.object({
-  pastResults: z
+  lastWinningNumbers: z
+    .array(z.number().min(1))
+    .length(5, { message: "Doit fournir exactement 5 numéros du dernier tirage."})
+    .describe('Les 5 numéros gagnants du tout dernier tirage.'),
+  constantToAdd: z
+    .number()
+    .min(1)
+    .describe('La constante à ajouter pour la génération du tableau.'),
+  maxLotteryNumber: z
+    .number()
+    .min(10) // e.g., 49, 90
+    .describe('Le numéro maximum possible dans cette loterie (ex: 90).'),
+  historicalData: z
     .string()
+    .min(50, { message: "Les données historiques doivent être suffisamment substantielles."})
     .describe(
-      'A string containing the past lottery results data, preferably recent results for a specific draw type. Example format: "Date: YYYY-MM-DD, Gagnants: N1,N2,N3,N4,N5, Machine: M1,M2; Date: YYYY-MM-DD, ..." '
+      'Données historiques complètes des tirages passés (dates, numéros gagnants, numéros machine) pour ce type de tirage, utilisées par lIA pour simuler les prédictions algorithmiques et appliquer les stratégies secondaires. Format : "Date: YYYY-MM-DD, Gagnants: N1,N2,N3,N4,N5, Machine: M1,M2; ..."'
     ),
 });
 export type GenerateLottoPredictionsInput = z.infer<
   typeof GenerateLottoPredictionsInputSchema
 >;
 
+const AlgorithmPredictionSchema = z.object({
+    predictedNumbers: z.array(z.number().min(1)).min(5, "Les algorithmes doivent prédire au moins 5 numéros."),
+    confidenceScores: z.array(z.number().min(0).max(1)).min(5, "Les algorithmes doivent fournir au moins 5 scores de confiance."),
+    analysis: z.string().describe("Analyse simulée des algorithmes (XGBoost, RF, LSTM, Hybride) expliquant leurs prédictions brutes basées sur historicalData."),
+});
+
 const GenerateLottoPredictionsOutputSchema = z.object({
-  predictedNumbers: z.array(z.number().min(1).max(90)).length(5).describe('An array of 5 unique predicted numbers for the next draw, between 1 and 90.'),
-  confidenceScores: z
+  generatedTable: z
+    .array(z.array(z.number().min(1)).length(5, "Chaque ligne du tableau doit contenir 5 numéros."))
+    .length(5, "Le tableau généré doit contenir 5 lignes."),
+  uniqueNumbersInTable: z.array(z.number().min(1)).describe("Liste des numéros uniques présents dans le tableau généré."),
+  uniqueNumbersFromPairs: z.array(z.number().min(1)).describe("Liste informationnelle des numéros uniques (1-90) formés à partir des paires de chiffres extraites du tableau."),
+  algorithmRawPredictions: AlgorithmPredictionSchema.describe("Prédictions brutes simulées par les algorithmes avant le filtrage par le tableau."),
+  finalPredictedNumbers: z
+    .array(z.number().min(1).max(90))
+    .length(5, "La prédiction finale doit contenir exactement 5 numéros uniques.")
+    .describe('Les 5 numéros finaux prédits pour le prochain tirage, après filtrage et complétion.'),
+  finalConfidenceScores: z
     .array(z.number().min(0).max(1))
-    .length(5)
-    .describe('An array of 5 confidence scores (between 0 and 1) for each corresponding predicted number.'),
-  analysis: z.string().describe('Une analyse détaillée en FRANÇAIS expliquant comment l\'IA est parvenue aux numéros prédits et à leurs scores de confiance, en se basant sur une simulation d\'analyse hybride (XGBoost, Random Forest, RNN-LSTM) des {{{pastResults}}}. L\'analyse doit mettre en évidence les tendances, motifs, ou particularités statistiques observées qui justifient la prédiction, en référençant explicitement comment chaque "modèle simulé" a contribué, et en notant si certains numéros tombent dans une plage de confiance d\'intérêt (67-73%). L\'analyse doit se concentrer exclusivement sur les données fournies dans {{{pastResults}}} pour le tirage concerné, car chaque type de tirage (ex: Reveil, Etoile) est indépendant.'),
+    .length(5, "Doit fournir 5 scores de confiance pour les numéros finaux.")
+    .describe('Scores de confiance pour chaque numéro final prédit, reflétant la stratégie globale.'),
+  finalPredictionExplanation: z.string().describe("Explication détaillée en FRANÇAIS des choix finaux, justifiant chaque numéro par sa présence dans le tableau, l'accord avec les algorithmes simulés, et/ou les stratégies de prédiction secondaires (fréquences, co-occurrences, écarts, modularité, sommes, différences internes, etc.) basées sur historicalData."),
 });
 export type GenerateLottoPredictionsOutput = z.infer<
   typeof GenerateLottoPredictionsOutputSchema
@@ -40,102 +68,168 @@ export type GenerateLottoPredictionsOutput = z.infer<
 export async function generateLottoPredictions(
   input: GenerateLottoPredictionsInput
 ): Promise<GenerateLottoPredictionsOutput> {
-  // Note: If a 503 Service Unavailable error occurs here, it's an external API issue (model overloaded).
-  // The application should catch this error in the calling component and inform the user to try again later.
+  // Validate that numbers in lastWinningNumbers are within maxLotteryNumber
+  if (input.lastWinningNumbers.some(n => n > input.maxLotteryNumber)) {
+    throw new Error(`Certains numéros du dernier tirage dépassent le numéro maximum autorisé de ${input.maxLotteryNumber}.`);
+  }
   return generateLottoPredictionsFlow(input);
 }
 
-// Refined prompt to simulate a sophisticated hybrid prediction model for Loto Bonheur.
 const generateLottoPredictionsPrompt = ai.definePrompt({
-  name: 'generateLottoPredictionsPrompt',
+  name: 'generateLottoPredictionsPrompt_v3_Strategy',
   input: {schema: GenerateLottoPredictionsInputSchema},
   output: {schema: GenerateLottoPredictionsOutputSchema},
-  prompt: `Vous êtes une IA experte simulant une architecture de prédiction de loterie hybride sophistiquée pour le Loto Bonheur (5 numéros uniques entre 1 et 90), en vous basant *exclusivement* sur les données fournies dans {{{pastResults}}} pour le type de tirage concerné. Chaque type de tirage (ex: Reveil, Etoile, Akwaba) est indépendant et votre analyse ne doit pas s'appuyer sur des données ou tendances d'autres types de tirages non fournis ici.
+  prompt: `Vous êtes une IA experte en stratégies de loterie. Votre tâche est de générer une prédiction de 5 numéros pour le prochain tirage en suivant une stratégie complexe.
 
-Votre mission est de simuler l'analyse de trois types de modèles et de combiner leurs "signaux" pour une prédiction robuste :
+Données d'entrée :
+-   lastWinningNumbers : Les 5 numéros gagnants du dernier tirage. {{{lastWinningNumbers}}}
+-   constantToAdd : La constante à utiliser pour la génération du tableau. {{{constantToAdd}}}
+-   maxLotteryNumber : Le numéro maximum possible dans cette loterie. {{{maxLotteryNumber}}}
+-   historicalData : Données historiques des tirages passés pour ce type de tirage. Utilisez ces données pour simuler les prédictions des algorithmes et pour appliquer les stratégies secondaires (fréquence, co-occurrence, etc.). {{{historicalData}}}
 
-1.  **XGBoost (Simulation) :**
-    *   Analyser les caractéristiques statistiques avancées comme les **écarts** de sortie (combien de tirages depuis la dernière apparition), les **fréquences** globales et récentes des numéros.
-    *   Intégrer comme caractéristiques spécifiques : les **différences internes** entre numéros d'un même tirage, les **différences positionnelles** (ex: entre le 1er et le 2ème numéro tiré sur plusieurs tirages), les **sommes** des numéros par tirage, et les **unités (modulo 10)** des numéros.
-    *   Prioriser les numéros et les **plages de numéros** (ex: 1-9, 10-19, etc.) qui apparaissent fréquemment ou qui ont des écarts significatifs dans les {{{pastResults}}}.
+Suivez attentivement les étapes ci-dessous :
 
-2.  **Random Forest (Simulation) :**
-    *   Modéliser les **interactions complexes entre les numéros**, y compris les **paires consécutives** ou statistiquement fréquentes, et les **interactions et combinaisons par plage** (ex: un numéro de la dizaine 10-19 apparaissant avec un numéro de la dizaine 40-49) observées dans les {{{pastResults}}}.
-    *   Valider la robustesse des combinaisons potentielles face au bruit statistique inhérent aux {{{pastResults}}}.
+ÉTAPE PRÉLIMINAIRE (INTERNE - SIMULATION DES ALGORITHMES) :
+1.  Analysez les {{{historicalData}}}. Simulez les prédictions d'une approche hybride sophistiquée (combinant conceptuellement XGBoost, Random Forest, RNN-LSTM).
+    *   XGBoost (simulé) : Analysez les fréquences, écarts, différences internes/positionnelles, sommes, unités modulo 10. Priorisez numéros/plages fréquents.
+    *   Random Forest (simulé) : Modélisez les paires consécutives, interactions/combinaisons par plage.
+    *   RNN-LSTM (simulé) : Capturez les séquences temporelles (différences, sommes, unités), les écarts, pour prédire les récurrences.
+2.  Générez un ensemble de prédictions brutes issues de cette simulation : 5 à 10 numéros, leurs scores de confiance (0-1), et une brève analyse de ces prédictions brutes. Stockez cela pour l'utiliser à l'étape "ALGORITHM RAW PREDICTIONS OUTPUT" et à l'étape "VÉRIFICATION".
 
-3.  **RNN-LSTM (Simulation) :**
-    *   Capturer les **tendances et séquences temporelles** dans les données {{{pastResults}}}.
-    *   Analyser les **séquences de différences** entre numéros consécutifs tirés au fil du temps, les **séquences de sommes** de tirages, et les **séquences d'unités (modulo 10)** des numéros sur plusieurs tirages.
-    *   Prédire les récurrences probables en s'entraînant (conceptuellement) sur les {{{pastResults}}}.
+ÉTAPE 1 : GÉNÉRATION DU TABLEAU (5x5)
+1.  Première ligne :
+    a.  Prenez les 'lastWinningNumbers'.
+    b.  Ajoutez 'constantToAdd' à chaque numéro.
+    c.  Si un résultat dépasse 'maxLotteryNumber', soustrayez 'maxLotteryNumber' de ce résultat (modulo effectif).
+    d.  Formez la première ligne avec les 5 numéros obtenus.
+2.  Deuxième à cinquième lignes :
+    a.  Pour chaque nouvelle ligne, utilisez la ligne *précédente* comme base.
+    b.  Ajoutez 'constantToAdd' à chaque numéro de la ligne précédente.
+    c.  Si un résultat dépasse 'maxLotteryNumber', soustrayez 'maxLotteryNumber'.
+    d.  Conservez les 5 numéros pour la nouvelle ligne.
+3.  Produisez le 'generatedTable' (un tableau de 5 tableaux de 5 numéros).
+4.  Produisez 'uniqueNumbersInTable' : la liste de tous les numéros uniques (triés) présents dans 'generatedTable'.
 
-4.  **Approche Hybride (Simulation) :**
-    *   Combiner les 'prédictions' ou 'signaux' des trois modèles simulés ci-dessus, basés *uniquement* sur l'analyse des {{{pastResults}}}.
-    *   Appliquer une **pondération conceptuelle** (par exemple, 40% pour les signaux de type XGBoost, 30% pour Random Forest, 30% pour RNN-LSTM) pour équilibrer leurs forces et arriver à une prédiction finale robuste pour le prochain tirage du type analysé.
-    *   Sélectionner les 5 numéros UNIQUES (1-90) ayant les plus forts signaux combinés.
-    *   Attribuer un score de confiance individuel (0.0 - 1.0) à chaque numéro prédit, reflétant la force des signaux combinés et la convergence des analyses simulées sur les {{{pastResults}}}.
-    *   Dans votre évaluation de la confiance, une plage de **67% à 73%** est considérée comme particulièrement intéressante, indiquant un bon équilibre entre potentiel et surévaluation. Si votre analyse des {{{pastResults}}} identifie des numéros dont la confiance se situe naturellement dans cette plage, mettez-les en évidence dans votre explication si possible, en expliquant pourquoi cette confiance est appropriée pour ces numéros dans le contexte de ce tirage spécifique.
+ÉTAPE 2 : EXTRACTION DES PAIRES (POUR INFORMATION - uniqueNumbersFromPairs)
+1.  À partir du 'generatedTable' :
+    a.  Lignes : Pour chaque ligne, extrayez toutes les paires de chiffres adjacents (ex: si une ligne a [12, 5, 38], les chiffres sont 1,2,5,3,8. Les paires sont 12, 25, 53, 38). Formez des numéros à partir de ces paires si la valeur est <= 'maxLotteryNumber' (ex: 12 -> 12, 25 -> 25).
+    b.  Colonnes : Pour chaque colonne, extrayez les paires de chiffres adjacents verticalement. Formez des numéros.
+    c.  Diagonales : Extrayez les paires de chiffres adjacents le long des diagonales principales (haut-gauche vers bas-droit et haut-droit vers bas-gauche) et des autres diagonales significatives si possible. Formez des numéros.
+2.  Produisez 'uniqueNumbersFromPairs' : la liste de tous les numéros uniques (1 à 'maxLotteryNumber', triés) formés à partir de ces paires de chiffres. Cette liste est pour information.
 
-5.  **Analyse Détaillée (champ 'analysis', en FRANÇAIS) :**
-    *   Expliquez clairement comment votre simulation de l'approche hybride (XGBoost, Random Forest, RNN-LSTM) et l'analyse des {{{pastResults}}} ont conduit à la sélection des numéros spécifiques et à leurs scores de confiance pour *ce type de tirage*.
-    *   Pour chaque "modèle simulé", décrivez brièvement les facteurs ou observations les plus importants qu'il aurait identifiés *exclusivement* dans les {{{pastResults}}}. Par exemple, "L'analyse de type XGBoost, basée sur les données fournies, a souligné la fréquence élevée du numéro X et l'écart important du numéro Y pour ce tirage. L'analyse de type LSTM a identifié une tendance à la hausse pour les sommes des tirages dans cet historique spécifique."
-    *   Concluez sur la manière dont la combinaison pondérée de ces signaux a justifié la prédiction finale. Si des numéros prédits tombent dans la plage de confiance d'intérêt (67%-73%), mentionnez-le et expliquez la pertinence de cette confiance pour ces numéros, toujours en lien avec les {{{pastResults}}} fournis.
+ÉTAPE 3 : RAPPORTER LES PRÉDICTIONS ALGORITHMIQUES BRUTES
+1.  Utilisez les prédictions simulées à l'ÉTAPE PRÉLIMINAIRE.
+2.  Produisez 'algorithmRawPredictions' : un objet avec 'predictedNumbers' (tableau de numéros), 'confidenceScores' (tableau de scores), et 'analysis' (l'analyse de ces prédictions brutes).
+
+ÉTAPE 4 : VÉRIFICATION ET FILTRAGE DES NUMÉROS PRÉDITS PAR LES ALGORITHMES
+1.  Comparez les 'algorithmRawPredictions.predictedNumbers' avec 'uniqueNumbersInTable'.
+2.  Identifiez les numéros prédits par les algorithmes qui sont ÉGALEMENT présents dans 'uniqueNumbersInTable'. Ce sont vos candidats principaux.
+
+ÉTAPE 5 : COMPLÉTION DES PRÉDICTIONS FINALES
+1.  Si vous avez 5 numéros ou plus issus de l'ÉTAPE 4, sélectionnez les 5 meilleurs (par exemple, ceux avec les plus hauts scores de confiance initiaux de 'algorithmRawPredictions', ou ceux qui apparaissent le plus fréquemment dans le tableau si applicable, ou une combinaison).
+2.  Si vous avez moins de 5 numéros :
+    a.  Prenez ceux que vous avez identifiés à l'ÉTAPE 4.
+    b.  Pour compléter jusqu'à 5 numéros, sélectionnez des numéros supplémentaires parmi les 'algorithmRawPredictions.predictedNumbers' qui N'ÉTAIENT PAS dans le tableau.
+    c.  Pour choisir ces numéros de complétion, appliquez les stratégies de prédiction secondaires en analysant les {{{historicalData}}} :
+        *   Fréquence : Numéros apparaissant souvent.
+        *   Co-occurrences : Paires de numéros fréquemment tirées ensemble.
+        *   Écarts : Numéros apparus récemment ou attendus.
+        *   Plages : Priorité à certaines plages de numéros.
+        *   Modularité : Unités (dernier chiffre) fréquentes.
+        *   Sommes : Viser une somme cible pour la combinaison totale des 5 numéros.
+        *   Différences internes : Viser une différence moyenne spécifique entre les numéros.
+    d.  Assurez-vous que les 5 'finalPredictedNumbers' sont uniques et compris entre 1 et 'maxLotteryNumber'.
+
+ÉTAPE 6 : NUMÉROS PRÉDITS FINAUX ET EXPLICATION
+1.  Produisez 'finalPredictedNumbers' : la liste finale des 5 numéros.
+2.  Produisez 'finalConfidenceScores' : un score de confiance (0-1) pour chacun des 5 'finalPredictedNumbers'. Ces scores doivent refléter la force de la prédiction après l'ensemble du processus (présence dans le tableau, accord avec les algorithmes, stratégies de complétion).
+3.  Produisez 'finalPredictionExplanation' (en FRANÇAIS) :
+    a.  Justifiez chaque numéro dans 'finalPredictedNumbers'.
+    b.  Expliquez s'il vient du filtrage par le tableau et des algorithmes.
+    c.  S'il a été ajouté en complétion, expliquez quelle(s) stratégie(s) secondaire(s) (fréquence, co-occurrence, écarts, modularité, sommes, différences internes, etc., basées sur {{{historicalData}}}) ont justifié son inclusion.
+    d.  Mentionnez brièvement comment la simulation des algorithmes (XGBoost, RF, LSTM) a informé les 'algorithmRawPredictions'.
+    e.  Si certains numéros finaux ont une confiance entre 67% et 73%, signalez-le et expliquez pourquoi cette confiance est appropriée.
 
 Assurez-vous que votre sortie est un objet JSON valide respectant le schéma de sortie.
-Les 5 numéros prédits doivent être dans le champ 'predictedNumbers'.
-Les 5 scores de confiance correspondants dans 'confidenceScores'.
-L'analyse détaillée en FRANÇAIS, focalisée sur les {{{pastResults}}} du tirage en question, dans le champ 'analysis'.
+Tous les numéros dans les listes de numéros doivent être triés par ordre croissant, sauf indication contraire (comme les numéros dans les lignes du tableau qui doivent conserver leur ordre de génération).
+Les 5 numéros dans 'finalPredictedNumbers' doivent être UNIQUES et entre 1 et 'maxLotteryNumber'.
+Le champ 'historicalData' est crucial pour les prédictions algorithmiques simulées et les stratégies secondaires.
 `,
 });
-// Minor refinement of prompt logic regarding draw independence.
+
 const generateLottoPredictionsFlow = ai.defineFlow(
   {
-    name: 'generateLottoPredictionsFlow',
+    name: 'generateLottoPredictionsFlow_v3_Strategy',
     inputSchema: GenerateLottoPredictionsInputSchema,
     outputSchema: GenerateLottoPredictionsOutputSchema,
   },
-  async input => {
-    // Note: If a 503 Service Unavailable error occurs here, it's an external API issue (model overloaded).
-    // The application should catch this error in the calling component and inform the user to try again later.
+  async (input): Promise<GenerateLottoPredictionsOutput> => {
     const {output} = await generateLottoPredictionsPrompt(input);
+
     if (!output) {
         throw new Error("L'IA n'a pas réussi à générer de prédictions. La sortie était nulle ou indéfinie.");
     }
-    if (!output.predictedNumbers || output.predictedNumbers.length !== 5 ) {
-        console.warn(`L'IA a retourné ${output.predictedNumbers?.length || 'aucun'} numéro prédit. Attendu : 5. Sortie :`, output);
-        throw new Error("L'IA n'a pas retourné le nombre attendu de prédictions (5).");
+
+    // Extensive validation of the complex output structure
+    if (!output.generatedTable || output.generatedTable.length !== 5 || !output.generatedTable.every(row => row.length === 5)) {
+        console.warn("L'IA a retourné un 'generatedTable' invalide:", output.generatedTable);
+        throw new Error("L'IA n'a pas retourné un 'generatedTable' (5x5) valide.");
     }
-    if (!output.confidenceScores || output.confidenceScores.length !== 5) {
-        console.warn(`L'IA a retourné ${output.confidenceScores?.length || 'aucun'} score de confiance. Attendu : 5. Sortie :`, output);
-        throw new Error("L'IA n'a pas retourné le nombre attendu de scores de confiance (5).");
+    if (!output.uniqueNumbersInTable || !Array.isArray(output.uniqueNumbersInTable)) {
+        console.warn("L'IA a retourné 'uniqueNumbersInTable' invalide:", output.uniqueNumbersInTable);
+        throw new Error("L'IA n'a pas retourné une liste valide pour 'uniqueNumbersInTable'.");
     }
-     // Ensure predicted numbers are unique; LLMs might occasionally repeat.
-    const uniquePredictedNumbers = [...new Set(output.predictedNumbers)];
-    if (uniquePredictedNumbers.length !== 5) {
-        console.warn(`L'IA a prédit des numéros non uniques. Originaux : ${output.predictedNumbers.join(',')}, Uniques : ${uniquePredictedNumbers.join(',')}`);
-        // Attempt to recover if possible by taking the first 5 unique, but this indicates an issue with the prompt or model.
-        if (uniquePredictedNumbers.length > 5) {
-            output.predictedNumbers = uniquePredictedNumbers.slice(0, 5);
-        } else {
-            // If less than 5 unique numbers, it's a more critical failure to meet the requirements
-            throw new Error(`L'IA a prédit des numéros non uniques et pas assez pour former un ensemble de 5. Attendu : 5 numéros uniques. Reçus (uniques) : ${uniquePredictedNumbers.join(',')}`);
-        }
-    } else {
-        output.predictedNumbers = uniquePredictedNumbers; // Ensure it's the unique set
+     if (!output.uniqueNumbersFromPairs || !Array.isArray(output.uniqueNumbersFromPairs)) {
+        console.warn("L'IA a retourné 'uniqueNumbersFromPairs' invalide:", output.uniqueNumbersFromPairs);
+        throw new Error("L'IA n'a pas retourné une liste valide pour 'uniqueNumbersFromPairs'.");
     }
 
-    // Validate number range
-    if (!output.predictedNumbers.every(num => num >= 1 && num <= 90)) {
-        console.warn(`L'IA a prédit des numéros hors plage (1-90). Sortie :`, output.predictedNumbers);
-        throw new Error("L'IA a prédit des numéros hors de la plage valide (1-90).");
+    if (!output.algorithmRawPredictions ||
+        !output.algorithmRawPredictions.predictedNumbers || output.algorithmRawPredictions.predictedNumbers.length < 5 ||
+        !output.algorithmRawPredictions.confidenceScores || output.algorithmRawPredictions.confidenceScores.length < 5 ||
+        !output.algorithmRawPredictions.analysis || output.algorithmRawPredictions.analysis.trim() === "") {
+        console.warn("L'IA a retourné 'algorithmRawPredictions' invalides:", output.algorithmRawPredictions);
+        throw new Error("L'IA n'a pas retourné des 'algorithmRawPredictions' valides (numéros, scores, analyse).");
     }
-    if (!output.analysis || output.analysis.trim() === "" || output.analysis.length < 50) { // Increased length check for detailed analysis
-        console.warn("L'IA a retourné une chaîne d'analyse vide, manquante ou très courte. Sortie :", output.analysis);
-        // Provide a default or throw an error if analysis is critical
-        output.analysis = "L'analyse détaillée des facteurs de prédiction (simulant XGBoost, Random Forest, LSTM) n'a pas été fournie ou était insuffisante par l'IA pour cette prédiction.";
+     if (output.algorithmRawPredictions.predictedNumbers.length !== output.algorithmRawPredictions.confidenceScores.length) {
+        console.warn("Discordance de longueur entre predictedNumbers et confidenceScores dans algorithmRawPredictions:", output.algorithmRawPredictions);
+        throw new Error("Discordance de longueur entre les numéros prédits et les scores de confiance dans les prédictions brutes des algorithmes.");
     }
+
+
+    if (!output.finalPredictedNumbers || output.finalPredictedNumbers.length !== 5 ) {
+        console.warn(`L'IA a retourné ${output.finalPredictedNumbers?.length || 'aucun'} numéro prédit final. Attendu : 5. Sortie :`, output.finalPredictedNumbers);
+        throw new Error("L'IA n'a pas retourné le nombre attendu de prédictions finales (5).");
+    }
+    if (!output.finalConfidenceScores || output.finalConfidenceScores.length !== 5) {
+        console.warn(`L'IA a retourné ${output.finalConfidenceScores?.length || 'aucun'} score de confiance final. Attendu : 5. Sortie :`, output.finalConfidenceScores);
+        throw new Error("L'IA n'a pas retourné le nombre attendu de scores de confiance finaux (5).");
+    }
+    
+    const uniqueFinalPredictedNumbers = [...new Set(output.finalPredictedNumbers)];
+    if (uniqueFinalPredictedNumbers.length !== 5) {
+        console.warn(`L'IA a prédit des numéros finaux non uniques. Originaux : ${output.finalPredictedNumbers.join(',')}, Uniques : ${uniqueFinalPredictedNumbers.join(',')}`);
+        throw new Error(`L'IA a prédit des numéros finaux non uniques. Attendu : 5 numéros uniques. Reçus (uniques) : ${uniqueFinalPredictedNumbers.join(',')}`);
+    }
+    output.finalPredictedNumbers = uniqueFinalPredictedNumbers.sort((a,b) => a - b); // Ensure sorted
+
+    if (!output.finalPredictedNumbers.every(num => num >= 1 && num <= input.maxLotteryNumber)) {
+        console.warn(`L'IA a prédit des numéros finaux hors plage (1-${input.maxLotteryNumber}). Sortie :`, output.finalPredictedNumbers);
+        throw new Error(`L'IA a prédit des numéros finaux hors de la plage valide (1-${input.maxLotteryNumber}).`);
+    }
+
+    if (!output.finalPredictionExplanation || output.finalPredictionExplanation.trim() === "" || output.finalPredictionExplanation.length < 50) {
+        console.warn("L'IA a retourné une chaîne 'finalPredictionExplanation' vide, manquante ou très courte. Sortie :", output.finalPredictionExplanation);
+        output.finalPredictionExplanation = "L'IA n'a pas fourni d'explication détaillée pour ces prédictions finales.";
+    }
+    
+    // Sort informational arrays for consistency if needed by UI
+    output.uniqueNumbersInTable.sort((a,b) => a - b);
+    output.uniqueNumbersFromPairs.sort((a,b) => a - b);
+    output.algorithmRawPredictions.predictedNumbers.sort((a,b) => a - b);
+
 
     return output;
   }
 );
 // Simplified prediction logic, removing complex model simulations.
-
