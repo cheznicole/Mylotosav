@@ -26,10 +26,11 @@ if (!getApps().length) {
 }
 
 const db: Firestore = getFirestore(app);
-const auth: Auth = getAuth(app); // Added Auth instance
+const auth: Auth = getAuth(app); // Auth instance
 
 let analytics: Analytics | undefined;
 if (typeof window !== 'undefined') {
+  // Ensure analytics is only initialized on the client-side
   analytics = getAnalytics(app);
 }
 
