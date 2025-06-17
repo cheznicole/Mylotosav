@@ -14,8 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import LotteryNumberDisplay from '@/components/features/lottery/LotteryNumberDisplay';
-import { Loader2, Wand2, FileText, AlertTriangle, Lightbulb, CheckSquare, Info, TableIcon } from 'lucide-react';
-// import type { StrategyPrediction } from '@/types'; // No longer importing StrategyPrediction from types
+import { Loader2, Wand2, FileText, AlertTriangle, Lightbulb, CheckSquare, Info, TableIcon } from 'lucide-react'; // TableIcon might be removed if not used for other tables
 import { fetchLotteryResults as fetchActualLotteryResults, DRAW_SCHEDULE } from '@/services/lotteryApi';
 import { 
   generateLottoPredictions
@@ -24,23 +23,16 @@ import { predictLottoNumbersWithStrategy } from '@/ai/flows/prompt-for-lotto-str
 import { displayPredictionConfidence } from '@/ai/flows/display-prediction-confidence';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Alert, AlertTitle, AlertDescription as UiAlertDescription } from '@/components/ui/alert';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+// Removed Table components from here as the main prediction table is gone.
+// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 
 interface PredictionEngineProps {
   drawName: string; 
 }
 
-// Schema for the "Modèle Basé sur Stratégie Complexe"
+// Schema for the "Stratégie Complexe IA" - REMOVED lastWinningNumbersString and constantToAddString
 const ModelPredictionFormSchema = z.object({
-  lastWinningNumbersString: z
-    .string()
-    .min(1, "Les 5 derniers numéros gagnants sont requis.")
-    .regex(/^(\d{1,2})(,\s*\d{1,2}){4}$/, "Entrez 5 numéros (1-90) séparés par des virgules."),
-  constantToAddString: z
-    .string()
-    .min(1, "La constante à ajouter est requise.")
-    .refine(val => !isNaN(parseInt(val)) && parseInt(val) >= 1, "Doit être un nombre entier >= 1."),
   maxLotteryNumberString: z
     .string()
     .min(1, "Le numéro maximum de la loterie est requis.")
@@ -127,14 +119,14 @@ function ConfidenceCheckerTab({ pageDrawName }: { pageDrawName: string }) {
         Math.exp(-0.1 * (historicalDraws.length - 1 - index)) 
       );
 
-      const input: Parameters<typeof displayPredictionConfidence>[0] = {
+      const inputForConfidence: Parameters<typeof displayPredictionConfidence>[0] = {
         predictedNumbers: numbersArray,
         winningNumbersHistory,
         maxNumber: maxNumValidated,
         temporalWeights,
       };
       
-      const response = await displayPredictionConfidence(input);
+      const response = await displayPredictionConfidence(inputForConfidence);
       if (response.error) {
         setCheckerError(response.error);
         toast({ variant: "destructive", title: "Erreur de Calcul de Confiance", description: response.error });
@@ -303,8 +295,6 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
   const modelPredictionForm = useForm<ModelPredictionFormData>({
     resolver: zodResolver(ModelPredictionFormSchema),
     defaultValues: {
-      lastWinningNumbersString: "",
-      constantToAddString: "1", 
       maxLotteryNumberString: "90", 
       historicalData: "",
     },
@@ -318,7 +308,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
   useEffect(() => {
     async function loadInitialData() {
       setError(null);
-      setIsLoadingModel(true); // Indicate loading for model tab
+      setIsLoadingModel(true); 
       try {
         const allApiResults = await fetchActualLotteryResults(); 
         const relevantApiResults = allApiResults
@@ -326,23 +316,17 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
           .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
         
         let historicalDataString = "";
-        let defaultLastWinningNumbers = "1,2,3,4,5"; // Fallback
 
         if (relevantApiResults.length > 0) {
             historicalDataString = relevantApiResults
-                .slice(0, 50) // Use last 50 relevant results for historical data
+                .slice(0, 100) // Use last 100 relevant results for historical data
                 .map(r => `Date: ${r.date}, Gagnants: ${r.gagnants.join(',')}${r.machine && r.machine.length > 0 ? `, Machine: ${r.machine.join(',')}` : ''}`)
                 .join('; ');
-            
-            // Set last winning numbers from the most recent result for this drawName
-            defaultLastWinningNumbers = relevantApiResults[0].gagnants.join(', ');
         } else {
             historicalDataString = `Exemple pour ${pageDrawName}: Date: 2024-07-20, Gagnants: 5,12,23,34,45; Date: 2024-07-19, Gagnants: 2,10,20,30,40; ... (Aucun résultat récent trouvé pour ${pageDrawName}, veuillez entrer des données manuellement ou via l'admin.)`;
         }
 
         modelPredictionForm.reset({
-            lastWinningNumbersString: defaultLastWinningNumbers,
-            constantToAddString: modelPredictionForm.getValues("constantToAddString") || "1",
             maxLotteryNumberString: modelPredictionForm.getValues("maxLotteryNumberString") || "90",
             historicalData: historicalDataString,
         });
@@ -353,8 +337,6 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
         setError(loadErrorMsg);
         const exampleHistorical = `Exemple: Date: 2024-07-20, Gagnants: 5,12,23,34,45 (pour ${pageDrawName}); ...`;
         modelPredictionForm.reset({
-            lastWinningNumbersString: "1,2,3,4,5",
-            constantToAddString: "1",
             maxLotteryNumberString: "90",
             historicalData: exampleHistorical,
         });
@@ -376,8 +358,6 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
     setError(null);
     try {
       const inputForAI: Parameters<typeof generateLottoPredictions>[0] = {
-        lastWinningNumbers: data.lastWinningNumbersString.split(',').map(n => parseInt(n.trim(), 10)),
-        constantToAdd: parseInt(data.constantToAddString, 10),
         maxLotteryNumber: parseInt(data.maxLotteryNumberString, 10),
         historicalData: data.historicalData,
       };
@@ -413,62 +393,36 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
   };
 
   const renderModelPredictionDetails = (prediction: Awaited<ReturnType<typeof generateLottoPredictions>>) => {
-    // Check if prediction or its nested properties are null/undefined before accessing
-    if (!prediction?.generatedTable || !prediction.uniqueNumbersInTable || !prediction.algorithmRawPredictions) {
+    if (!prediction?.simulatedModelInsights) {
         return <p className="text-sm text-muted-foreground">Données de prédiction du modèle incomplètes.</p>;
     }
+
+    const { dbnAnalysis, lightgbmAnalysis, clusteringAnalysis, ensembleCandidateNumbers } = prediction.simulatedModelInsights;
 
     return (
       <div className="space-y-6">
         <div>
-          <h4 className="font-semibold mb-2 text-primary flex items-center"><TableIcon className="w-4 h-4 mr-2" /> Tableau Généré (5x5):</h4>
-          <Table className="border rounded-md">
-            <TableHeader>
-              <TableRow>
-                {prediction.generatedTable[0]?.map((_, colIndex) => (
-                  <TableHead key={`th-${colIndex}`} className="text-center">Col {colIndex + 1}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {prediction.generatedTable.map((row, rowIndex) => (
-                <TableRow key={`table-row-${rowIndex}`}>
-                  {row.map((num, numIndex) => (
-                    <TableCell key={`cell-${rowIndex}-${numIndex}`} className="p-1 text-center">
-                      <LotteryNumberDisplay number={num} size="sm" className="mx-auto" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+           <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Analyses Simulées des Modèles:</h4>
+           <Card className="mb-3">
+             <CardHeader className="py-2 px-3"><CardTitle className="text-sm">DBN (Réseau Bayésien Dynamique)</CardTitle></CardHeader>
+             <CardContent className="py-2 px-3 text-xs text-muted-foreground">{dbnAnalysis}</CardContent>
+           </Card>
+           <Card className="mb-3">
+             <CardHeader className="py-2 px-3"><CardTitle className="text-sm">LightGBM (Gradient Boosting)</CardTitle></CardHeader>
+             <CardContent className="py-2 px-3 text-xs text-muted-foreground">{lightgbmAnalysis}</CardContent>
+           </Card>
+           <Card className="mb-3">
+             <CardHeader className="py-2 px-3"><CardTitle className="text-sm">Clustering</CardTitle></CardHeader>
+             <CardContent className="py-2 px-3 text-xs text-muted-foreground">{clusteringAnalysis}</CardContent>
+           </Card>
         </div>
 
         <div>
-          <h4 className="font-semibold mb-1">Numéros Uniques du Tableau:</h4>
-          <div className="flex flex-wrap gap-1">
-            {prediction.uniqueNumbersInTable.map(num => <LotteryNumberDisplay key={`unique-table-${num}`} number={num} size="sm" />)}
-          </div>
-        </div>
-        
-        {prediction.uniqueNumbersFromPairs && prediction.uniqueNumbersFromPairs.length > 0 && (
-          <div>
-            <h4 className="font-semibold mb-1">Numéros Uniques des Paires (Info):</h4>
-            <div className="flex flex-wrap gap-1">
-              {prediction.uniqueNumbersFromPairs.map(num => <LotteryNumberDisplay key={`unique-pair-${num}`} number={num} size="sm" />)}
-            </div>
-          </div>
-        )}
-
-        <div>
-           <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Analyse des Algorithmes (Pré-filtrage):</h4>
-           <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md whitespace-pre-line">{prediction.algorithmRawPredictions.analysis}</p>
-           <h5 className="font-medium mt-2 mb-1 text-sm">Numéros bruts des algorithmes:</h5>
+          <h5 className="font-medium mt-2 mb-1 text-sm">Numéros Candidats de l'Ensemble Simulé:</h5>
            <div className="flex flex-wrap gap-1">
-             {prediction.algorithmRawPredictions.predictedNumbers.map((num, idx) => (
-                <div key={`raw-algo-${num}-${idx}`} className="flex items-center gap-1 p-1 border rounded-md bg-muted/50 text-xs">
+             {ensembleCandidateNumbers.map((num, idx) => (
+                <div key={`ensemble-candidate-${num}-${idx}`} className="flex items-center gap-1 p-1 border rounded-md bg-muted/50 text-xs">
                     <LotteryNumberDisplay number={num} size="sm" />
-                    <span>({(prediction.algorithmRawPredictions.confidenceScores[idx] * 100).toFixed(0)}%)</span>
                 </div>
              ))}
            </div>
@@ -494,18 +448,23 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
     let mainExplanation: string | undefined = undefined;
     let isModelOutputType = false;
 
+    // Type guard for GenerateLottoPredictionsOutput
     if ('finalPredictedNumbers' in prediction && prediction.finalPredictedNumbers) { 
-      numbersToDisplay = prediction.finalPredictedNumbers;
-      confidenceToDisplay = prediction.finalConfidenceScores;
-      mainExplanation = prediction.finalPredictionExplanation; 
+      const modelPred = prediction as Awaited<ReturnType<typeof generateLottoPredictions>>;
+      numbersToDisplay = modelPred.finalPredictedNumbers;
+      confidenceToDisplay = modelPred.finalConfidenceScores;
+      // mainExplanation will be rendered by renderModelPredictionDetails for this type
       isModelOutputType = true;
-    } else if ('predictedNumbers' in prediction && prediction.predictedNumbers) { 
-      numbersToDisplay = prediction.predictedNumbers;
-      confidenceToDisplay = prediction.confidenceScores;
-      mainExplanation = (prediction as Awaited<ReturnType<typeof predictLottoNumbersWithStrategy>>).explanation;
+    } 
+    // Type guard for StrategyPredictionOutput
+    else if ('predictedNumbers' in prediction && prediction.predictedNumbers) { 
+      const strategyPred = prediction as Awaited<ReturnType<typeof predictLottoNumbersWithStrategy>>;
+      numbersToDisplay = strategyPred.predictedNumbers;
+      confidenceToDisplay = strategyPred.confidenceScores;
+      mainExplanation = strategyPred.explanation;
     }
 
-    if (numbersToDisplay.length === 0) {
+    if (numbersToDisplay.length === 0 && !isModelOutputType) { // Don't show this if model output is expected but empty
       return (
         <Card className="mt-6 shadow-md">
           <CardHeader>
@@ -513,7 +472,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">Aucune donnée de prédiction finale à afficher.</p>
-            {mainExplanation && !isModelOutputType && (
+            {mainExplanation && ( // Only show basic explanation for strategy type if numbers are empty
              <div>
               <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Explication IA:</h4>
               <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md whitespace-pre-line">{mainExplanation}</p>
@@ -524,21 +483,22 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
       );
     }
     
-
     return (
       <Card className="mt-6 shadow-md">
         <CardHeader>
           <CardTitle className="text-lg text-primary">{title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <h4 className="font-semibold mb-2">Numéros Finaux Prédits:</h4>
-            <div className="flex flex-wrap gap-2">
-              {numbersToDisplay.map((num, index) => (
-                <LotteryNumberDisplay key={`pred-num-${num}-idx-${index}`} number={num} />
-              ))}
+          {numbersToDisplay.length > 0 && (
+            <div>
+              <h4 className="font-semibold mb-2">Numéros Finaux Prédits:</h4>
+              <div className="flex flex-wrap gap-2">
+                {numbersToDisplay.map((num, index) => (
+                  <LotteryNumberDisplay key={`pred-num-${num}-idx-${index}`} number={num} />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           {confidenceToDisplay && confidenceToDisplay.length > 0 && (
             <div>
               <h4 className="font-semibold mb-2">Scores de Confiance FINAux:</h4>
@@ -554,13 +514,15 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
           
           {isModelOutputType && modelPrediction && <div className="mt-4">{renderModelPredictionDetails(modelPrediction)}</div>}
           
-          
           {!isModelOutputType && mainExplanation && (
             <div>
               <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Explication IA (Stratégie):</h4>
               <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md whitespace-pre-line">{mainExplanation}</p>
             </div>
           )}
+           {numbersToDisplay.length === 0 && isModelOutputType && (
+             <p className="text-sm text-muted-foreground mt-4">Aucun numéro final prédit à afficher, mais l'analyse des modèles simulés et l'explication sont disponibles ci-dessus.</p>
+           )}
         </CardContent>
       </Card>
     );
@@ -606,47 +568,24 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
           <CardHeader>
             <CardTitle className="text-base">Prédire avec la Stratégie Complexe et Analyse IA</CardTitle>
             <CardDescription>
-              Fournissez les informations nécessaires pour que l'IA (Gemini) applique la stratégie de génération de tableau, de filtrage algorithmique simulé, et de sélection finale pour {pageDrawName}.
+              Fournissez les informations nécessaires pour que l'IA (Gemini) simule les analyses DBN, LightGBM, Clustering, et un ensemble pondéré pour {pageDrawName}.
             </CardDescription>
           </CardHeader>
           <Form {...modelPredictionForm}>
             <form onSubmit={modelPredictionForm.handleSubmit(onModelPredictionSubmit)}>
               <CardContent className="space-y-4">
+                {/* REMOVED lastWinningNumbersString and constantToAddString fields */}
                 <FormField
                   control={modelPredictionForm.control}
-                  name="lastWinningNumbersString"
+                  name="maxLotteryNumberString"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>5 Derniers Numéros Gagnants (séparés par virgule, pour le tableau)</FormLabel>
-                      <FormControl><Input placeholder="Ex: 5,12,23,34,45" {...field} /></FormControl>
+                      <FormItem>
+                      <FormLabel>Numéro Max. Loterie</FormLabel>
+                      <FormControl><Input type="number" placeholder="Ex: 90" {...field} /></FormControl>
                       <FormMessage />
-                    </FormItem>
+                      </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                    control={modelPredictionForm.control}
-                    name="constantToAddString"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Constante à Ajouter (pour tableau)</FormLabel>
-                        <FormControl><Input type="number" placeholder="Ex: 1" {...field} /></FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
-                    <FormField
-                    control={modelPredictionForm.control}
-                    name="maxLotteryNumberString"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Numéro Max. Loterie</FormLabel>
-                        <FormControl><Input type="number" placeholder="Ex: 90" {...field} /></FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
-                </div>
                 <FormField
                   control={modelPredictionForm.control}
                   name="historicalData"
@@ -728,3 +667,6 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
 }
 // Minor adjustment for build re-evaluation.
 // Another comment to ensure this file is processed cleanly by the build system.
+// Removed table generation logic from this component as well.
+// Simplified form for model prediction.
+// Adjusted rendering logic for prediction output.
