@@ -1,15 +1,19 @@
+
 "use client";
 
 import { useEffect, useState, useMemo } from 'react';
-import type { NumberFrequency } from '@/types';
-import { fetchLotteryResults, analyzeFrequencies, DRAW_SCHEDULE, type DrawResult as ApiDrawResult } from '@/services/lotteryApi';
+import type { NumberFrequency, NumberGap } from '@/types';
+import { fetchLotteryResults, analyzeFrequencies, analyzeGaps, type DrawResult as ApiDrawResult } from '@/services/lotteryApi';
 import LotteryNumberDisplay from '@/components/features/lottery/LotteryNumberDisplay';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal } from "lucide-react";
+import { Terminal, TrendingUp, TrendingDown, Hourglass } from "lucide-react";
+import { formatDistanceToNow, parseISO } from 'date-fns';
+import { fr } from 'date-fns/locale';
+
 
 const CHART_ITEMS_COUNT = 15;
 
@@ -20,36 +24,29 @@ interface StatisticalAnalysisProps {
 export default function StatisticalAnalysis({ specificDrawName }: StatisticalAnalysisProps) {
   const [allFetchedResults, setAllFetchedResults] = useState<ApiDrawResult[]>([]);
   const [frequencies, setFrequencies] = useState<NumberFrequency[]>([]);
+  const [gaps, setGaps] = useState<NumberGap[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Month filter can be added back if needed, for now, focus on the specificDrawName
-  // const availableMonths = useMemo(() => getRecentMonths(6), []);
-  // const [selectedMonth, setSelectedMonth] = useState<string>(() => availableMonths[0]?.value || "");
-
   useEffect(() => {
-    // if (!selectedMonth) return; // Uncomment if month filter is re-added
-
-    const loadResultsForMonth = async () => {
+    const loadResults = async () => {
       setLoading(true);
       setError(null);
       try {
-        // Fetch results, potentially for a default period or all available
-        // If API supports monthly fetching and it's desired:
-        // const data = await fetchLotteryResults(selectedMonth);
-        const data = await fetchLotteryResults(); // Fetches based on API default (e.g., current month)
+        const data = await fetchLotteryResults();
         setAllFetchedResults(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch lottery results.');
         setAllFetchedResults([]);
         setFrequencies([]);
+        setGaps([]);
         console.error(err);
       } finally {
         setLoading(false);
       }
     };
-    loadResultsForMonth();
-  }, []); // Re-fetch if selectedMonth changes (if month filter is re-added)
+    loadResults();
+  }, []); 
 
 
   useEffect(() => {
@@ -59,18 +56,21 @@ export default function StatisticalAnalysis({ specificDrawName }: StatisticalAna
 
     if (filteredByDrawName.length === 0 && allFetchedResults.length > 0) {
        setFrequencies([]);
+       setGaps([]);
        return;
     }
     
-    const rawFrequencies = analyzeFrequencies(filteredByDrawName); // analyzeFrequencies is from lotteryApi
+    const rawFrequencies = analyzeFrequencies(filteredByDrawName);
     const formattedFrequencies: NumberFrequency[] = Object.entries(rawFrequencies)
       .map(([numStr, freq]) => ({
         number: parseInt(numStr, 10),
         frequency: freq,
       }))
       .sort((a, b) => b.number - a.number); 
-    
     setFrequencies(formattedFrequencies);
+
+    const gapData = analyzeGaps(filteredByDrawName);
+    setGaps(gapData);
 
   }, [allFetchedResults, specificDrawName]);
 
@@ -82,6 +82,10 @@ export default function StatisticalAnalysis({ specificDrawName }: StatisticalAna
   const leastFrequent = useMemo(() =>
     [...frequencies].sort((a, b) => a.frequency - b.frequency).slice(0, CHART_ITEMS_COUNT),
     [frequencies]
+  );
+  const mostOverdue = useMemo(() =>
+    [...gaps].sort((a, b) => b.gap - a.gap).slice(0, CHART_ITEMS_COUNT),
+    [gaps]
   );
 
   if (error && !loading) {
@@ -130,12 +134,12 @@ export default function StatisticalAnalysis({ specificDrawName }: StatisticalAna
       <CardHeader className="px-0">
         <CardTitle className="text-xl font-semibold text-primary">Statistiques des Numéros</CardTitle>
         <CardDescription>
-          Analyse de la fréquence des numéros pour le tirage: {specificDrawName}.
-          {/* Month and Draw Name filters removed as context is provided by parent page */}
+          Analyse de la fréquence et des écarts des numéros pour le tirage: {specificDrawName}.
         </CardDescription>
-         <TabsList className="grid w-full grid-cols-2 md:w-1/2 mt-6">
-          <TabsTrigger value="mostFrequent">Plus Fréquents</TabsTrigger>
-          <TabsTrigger value="leastFrequent">Moins Fréquents</TabsTrigger>
+         <TabsList className="grid w-full grid-cols-3 md:w-1/2 mt-6">
+          <TabsTrigger value="mostFrequent"><TrendingUp className="w-4 h-4 mr-2"/>Plus Fréquents</TabsTrigger>
+          <TabsTrigger value="leastFrequent"><TrendingDown className="w-4 h-4 mr-2"/>Moins Fréquents</TabsTrigger>
+          <TabsTrigger value="gaps"><Hourglass className="w-4 h-4 mr-2"/>Écarts</TabsTrigger>
         </TabsList>
       </CardHeader>
      
@@ -180,8 +184,36 @@ export default function StatisticalAnalysis({ specificDrawName }: StatisticalAna
               </CardContent>
             </Card>
           </TabsContent>
+          <TabsContent value="gaps">
+             <Card className="shadow-lg mt-4">
+              <CardHeader>
+                <CardTitle className="text-lg">Top {CHART_ITEMS_COUNT} Numéros les Plus en Retard (Écart le Plus Grand)</CardTitle>
+                <CardDescription>
+                  L'écart représente le nombre de tirages pour "{specificDrawName}" depuis la dernière apparition d'un numéro.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                 <ul className="space-y-3">
+                    {mostOverdue.map(item => (
+                       <li key={`gap-${item.number}`} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                          <div className="flex items-center gap-4">
+                             <LotteryNumberDisplay number={item.number} size="md" />
+                             <div>
+                                <p className="font-semibold">Écart: {item.gap} tirages</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Dernière apparition: {item.lastSeenDate ? `il y a ${formatDistanceToNow(parseISO(item.lastSeenDate), { locale: fr })}` : 'Jamais (dans cet historique)'}
+                                </p>
+                             </div>
+                          </div>
+                       </li>
+                    ))}
+                 </ul>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </>
       )}
     </Tabs>
   );
 }
+

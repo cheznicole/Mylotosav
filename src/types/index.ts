@@ -11,6 +11,12 @@ export interface NumberFrequency {
   frequency: number;
 }
 
+export interface NumberGap {
+  number: number;
+  gap: number; // Number of draws since last appearance
+  lastSeenDate: string | null;
+}
+
 export interface CooccurrenceData {
   number: number;
   cooccurringNumbers: { number: number, frequency: number }[];

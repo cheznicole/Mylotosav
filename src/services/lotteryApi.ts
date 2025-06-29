@@ -13,7 +13,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig'; // Ensure db is correctly imported
-import type { Prediction as IPrediction } from '@/types'; // Using Prediction from types for consistency
+import type { Prediction as IPrediction, NumberGap } from '@/types'; // Using Prediction from types for consistency
 import { getYear, parse as parseDateFns, isValid, format } from 'date-fns';
 import axios, { type AxiosResponse } from 'axios';
 
@@ -367,6 +367,43 @@ export function analyzeFrequencies(draws: DrawResult[]): { [key: number]: number
   return frequency;
 }
 
+export function analyzeGaps(draws: DrawResult[]): NumberGap[] {
+  if (draws.length === 0) {
+    return Array.from({ length: 90 }, (_, i) => ({ number: i + 1, gap: 0, lastSeenDate: null }));
+  }
+
+  // Sort draws from newest to oldest for easier gap calculation
+  const sortedDraws = [...draws].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  
+  const gaps: NumberGap[] = [];
+
+  for (let num = 1; num <= 90; num++) {
+    let gap = -1;
+    let lastSeenDate: string | null = null;
+
+    for (let i = 0; i < sortedDraws.length; i++) {
+      const draw = sortedDraws[i];
+      // Check both winning and machine numbers for appearance
+      const allNumbersInDraw = [...draw.gagnants, ...(draw.machine || [])];
+      if (allNumbersInDraw.includes(num)) {
+        gap = i;
+        lastSeenDate = draw.date;
+        break; // Found the most recent appearance, stop searching for this number
+      }
+    }
+    
+    if (gap === -1) {
+      // Number was never drawn in this specific set of results
+      gaps.push({ number: num, gap: sortedDraws.length, lastSeenDate: null });
+    } else {
+      gaps.push({ number: num, gap, lastSeenDate });
+    }
+  }
+
+  return gaps;
+}
+
+
 function analyzeSuccessivePairs(draws: DrawResult[]): Array<{ date1: string; date2: string; common_numbers: number[] }> {
   const pairs: Array<{ date1: string; date2: string; common_numbers: number[] }> = [];
   const sortedDraws = [...draws].sort((a, b) => {
@@ -479,7 +516,6 @@ function generateCombination(probabilities: { [key: number]: number }): number[]
         if (availableNumbers.length > 0) {
             let fallbackIndex = Math.floor(Math.random() * availableNumbers.length);
             combination.push(availableNumbers[fallbackIndex]);
-            availableNumbers.splice(fallbackIndex, 1);
             if (availableProbs.length > fallbackIndex) availableProbs.splice(fallbackIndex, 1);
         } else {
             break;
