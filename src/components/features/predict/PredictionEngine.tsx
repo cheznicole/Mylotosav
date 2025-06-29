@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import LotteryNumberDisplay from '@/components/features/lottery/LotteryNumberDisplay';
-import { Loader2, Wand2, FileText, AlertTriangle, Lightbulb, CheckSquare, Info, TableIcon } from 'lucide-react'; // TableIcon might be removed if not used for other tables
+import { Loader2, Wand2, FileText, AlertTriangle, Lightbulb, CheckSquare, Info } from 'lucide-react'; 
 import { fetchLotteryResults as fetchActualLotteryResults, DRAW_SCHEDULE } from '@/services/lotteryApi';
 import { 
   generateLottoPredictions
@@ -23,15 +23,13 @@ import { predictLottoNumbersWithStrategy } from '@/ai/flows/prompt-for-lotto-str
 import { displayPredictionConfidence } from '@/ai/flows/display-prediction-confidence';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Alert, AlertTitle, AlertDescription as UiAlertDescription } from '@/components/ui/alert';
-// Removed Table components from here as the main prediction table is gone.
-// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 
 interface PredictionEngineProps {
   drawName: string; 
 }
 
-// Schema for the "Stratégie Complexe IA" - REMOVED lastWinningNumbersString and constantToAddString
+// Schema for the "Stratégie Complexe IA"
 const ModelPredictionFormSchema = z.object({
   maxLotteryNumberString: z
     .string()
@@ -39,13 +37,11 @@ const ModelPredictionFormSchema = z.object({
     .refine(val => !isNaN(parseInt(val)) && parseInt(val) >= 10, "Doit être un nombre entier >= 10 (ex: 90)."),
   historicalData: z.string().min(50, { message: "Les données historiques sont requises (au moins 50 caractères)." }),
 });
-type ModelPredictionFormData = z.infer<typeof ModelPredictionFormSchema>;
 
 
 const StrategyFormSchema = z.object({
   strategyPrompt: z.string().min(10, { message: "Veuillez décrire votre stratégie." }),
 });
-type StrategyFormData = z.infer<typeof StrategyFormSchema>;
 
 const ConfidenceCheckerSchema = z.object({
   selectedDrawName: z.string().min(1, {message: "Veuillez sélectionner un nom de tirage."}),
@@ -67,7 +63,6 @@ const ConfidenceCheckerSchema = z.object({
     }),
   maxNumber: z.string().refine(val => !isNaN(parseInt(val,10)) && parseInt(val,10) >= 10, {message: "Numéro maximum invalide (doit être >= 10)"}).default("90"),
 });
-type ConfidenceCheckerFormData = z.infer<typeof ConfidenceCheckerSchema>;
 
 
 function ConfidenceCheckerTab({ pageDrawName }: { pageDrawName: string }) {
@@ -76,7 +71,7 @@ function ConfidenceCheckerTab({ pageDrawName }: { pageDrawName: string }) {
   const [checkerResult, setCheckerResult] = useState<Awaited<ReturnType<typeof displayPredictionConfidence>> | null>(null);
   const [checkerError, setCheckerError] = useState<string | null>(null);
   
-  const confidenceForm = useForm<ConfidenceCheckerFormData>({
+  const confidenceForm = useForm<z.infer<typeof ConfidenceCheckerSchema>>({
     resolver: zodResolver(ConfidenceCheckerSchema),
     defaultValues: {
       selectedDrawName: pageDrawName, 
@@ -100,7 +95,7 @@ function ConfidenceCheckerTab({ pageDrawName }: { pageDrawName: string }) {
     return options.sort((a, b) => a.name.localeCompare(b.name));
   }, []);
 
-  const onConfidenceCheckSubmit: SubmitHandler<ConfidenceCheckerFormData> = async (data) => {
+  const onConfidenceCheckSubmit: SubmitHandler<z.infer<typeof ConfidenceCheckerSchema>> = async (data) => {
     setCheckerLoading(true);
     setCheckerError(null);
     setCheckerResult(null);
@@ -292,7 +287,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
   const [strategyPrediction, setStrategyPrediction] = useState<Awaited<ReturnType<typeof predictLottoNumbersWithStrategy>> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const modelPredictionForm = useForm<ModelPredictionFormData>({
+  const modelPredictionForm = useForm<z.infer<typeof ModelPredictionFormSchema>>({
     resolver: zodResolver(ModelPredictionFormSchema),
     defaultValues: {
       maxLotteryNumberString: "90", 
@@ -300,7 +295,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
     },
   });
 
-  const strategyForm = useForm<StrategyFormData>({
+  const strategyForm = useForm<z.infer<typeof StrategyFormSchema>>({
     resolver: zodResolver(StrategyFormSchema),
     defaultValues: { strategyPrompt: "" },
   });
@@ -352,7 +347,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
   }, [pageDrawName]);
   
 
-  const onModelPredictionSubmit: SubmitHandler<ModelPredictionFormData> = async (data) => {
+  const onModelPredictionSubmit: SubmitHandler<z.infer<typeof ModelPredictionFormSchema>> = async (data) => {
     setIsLoadingModel(true);
     setModelPrediction(null);
     setError(null);
@@ -374,7 +369,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
     }
   };
 
-  const onStrategySubmit: SubmitHandler<StrategyFormData> = async (data) => {
+  const onStrategySubmit: SubmitHandler<z.infer<typeof StrategyFormSchema>> = async (data) => {
     setIsLoadingStrategy(true);
     setStrategyPrediction(null);
     setError(null);
@@ -397,23 +392,23 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
         return <p className="text-sm text-muted-foreground">Données de prédiction du modèle incomplètes.</p>;
     }
 
-    const { dbnAnalysis, lightgbmAnalysis, clusteringAnalysis, ensembleCandidateNumbers } = prediction.simulatedModelInsights;
+    const { xgboostAnalysis, randomForestAnalysis, rnnLstmAnalysis, ensembleCandidateNumbers } = prediction.simulatedModelInsights;
 
     return (
       <div className="space-y-6">
         <div>
            <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Analyses Simulées des Modèles:</h4>
            <Card className="mb-3">
-             <CardHeader className="py-2 px-3"><CardTitle className="text-sm">DBN (Réseau Bayésien Dynamique)</CardTitle></CardHeader>
-             <CardContent className="py-2 px-3 text-xs text-muted-foreground">{dbnAnalysis}</CardContent>
+             <CardHeader className="py-2 px-3"><CardTitle className="text-sm">XGBoost (Fréquences & Écarts)</CardTitle></CardHeader>
+             <CardContent className="py-2 px-3 text-xs text-muted-foreground">{xgboostAnalysis}</CardContent>
            </Card>
            <Card className="mb-3">
-             <CardHeader className="py-2 px-3"><CardTitle className="text-sm">LightGBM (Gradient Boosting)</CardTitle></CardHeader>
-             <CardContent className="py-2 px-3 text-xs text-muted-foreground">{lightgbmAnalysis}</CardContent>
+             <CardHeader className="py-2 px-3"><CardTitle className="text-sm">Random Forest (Interactions)</CardTitle></CardHeader>
+             <CardContent className="py-2 px-3 text-xs text-muted-foreground">{randomForestAnalysis}</CardContent>
            </Card>
            <Card className="mb-3">
-             <CardHeader className="py-2 px-3"><CardTitle className="text-sm">Clustering</CardTitle></CardHeader>
-             <CardContent className="py-2 px-3 text-xs text-muted-foreground">{clusteringAnalysis}</CardContent>
+             <CardHeader className="py-2 px-3"><CardTitle className="text-sm">RNN-LSTM (Tendances Temporelles)</CardTitle></CardHeader>
+             <CardContent className="py-2 px-3 text-xs text-muted-foreground">{rnnLstmAnalysis}</CardContent>
            </Card>
         </div>
 
@@ -453,7 +448,6 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
       const modelPred = prediction as Awaited<ReturnType<typeof generateLottoPredictions>>;
       numbersToDisplay = modelPred.finalPredictedNumbers;
       confidenceToDisplay = modelPred.finalConfidenceScores;
-      // mainExplanation will be rendered by renderModelPredictionDetails for this type
       isModelOutputType = true;
     } 
     // Type guard for StrategyPredictionOutput
@@ -464,7 +458,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
       mainExplanation = strategyPred.explanation;
     }
 
-    if (numbersToDisplay.length === 0 && !isModelOutputType) { // Don't show this if model output is expected but empty
+    if (numbersToDisplay.length === 0 && !isModelOutputType) {
       return (
         <Card className="mt-6 shadow-md">
           <CardHeader>
@@ -472,7 +466,7 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">Aucune donnée de prédiction finale à afficher.</p>
-            {mainExplanation && ( // Only show basic explanation for strategy type if numbers are empty
+            {mainExplanation && ( 
              <div>
               <h4 className="font-semibold mb-2 mt-4 text-primary flex items-center"><Lightbulb className="w-4 h-4 mr-2" /> Explication IA:</h4>
               <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md whitespace-pre-line">{mainExplanation}</p>
@@ -568,13 +562,12 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
           <CardHeader>
             <CardTitle className="text-base">Prédire avec la Stratégie Complexe et Analyse IA</CardTitle>
             <CardDescription>
-              Fournissez les informations nécessaires pour que l'IA (Gemini) simule les analyses DBN, LightGBM, Clustering, et un ensemble pondéré pour {pageDrawName}.
+              Fournissez les informations nécessaires pour que l'IA (Gemini) simule les analyses XGBoost, Random Forest, et RNN-LSTM pour {pageDrawName}.
             </CardDescription>
           </CardHeader>
           <Form {...modelPredictionForm}>
             <form onSubmit={modelPredictionForm.handleSubmit(onModelPredictionSubmit)}>
               <CardContent className="space-y-4">
-                {/* REMOVED lastWinningNumbersString and constantToAddString fields */}
                 <FormField
                   control={modelPredictionForm.control}
                   name="maxLotteryNumberString"
@@ -665,8 +658,3 @@ export default function PredictionEngine({ drawName: pageDrawName }: PredictionE
     </Tabs>
   );
 }
-// Minor adjustment for build re-evaluation.
-// Another comment to ensure this file is processed cleanly by the build system.
-// Removed table generation logic from this component as well.
-// Simplified form for model prediction.
-// Adjusted rendering logic for prediction output.
